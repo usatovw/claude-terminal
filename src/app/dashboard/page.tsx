@@ -145,6 +145,12 @@ export default function Dashboard() {
   const handleResumeSession = useCallback(async () => {
     if (!activeSessionId) return;
     await fetch(`/api/sessions/${activeSessionId}`, { method: "PUT" });
+    // Optimistically mark session as active so overlay hides immediately
+    setSessions((prev) =>
+      prev.map((s) =>
+        s.sessionId === activeSessionId ? { ...s, isActive: true } : s
+      )
+    );
     setTerminalKey((k) => k + 1);
     setConnectionStatus("idle");
     setViewMode("terminal");

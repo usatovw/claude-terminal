@@ -113,8 +113,10 @@ export default function SessionList({
     else if (e.key === "Escape") setEditingId(null);
   };
 
-  const activeSessions = sessions.filter((s) => s.isActive);
-  const stoppedSessions = sessions.filter((s) => !s.isActive);
+  const byNewest = (a: Session, b: Session) =>
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  const activeSessions = sessions.filter((s) => s.isActive).sort(byNewest);
+  const stoppedSessions = sessions.filter((s) => !s.isActive).sort(byNewest);
 
   return (
     <div className="flex flex-col h-full">

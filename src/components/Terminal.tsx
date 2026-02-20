@@ -143,50 +143,40 @@ export default function Terminal({ sessionId, fullscreen, onConnectionChange }: 
       }
     });
 
-    // Intercept Ctrl+V / Cmd+V BEFORE xterm processes it
+    // Block xterm from sending \x16 on Ctrl+V — we handle paste via paste event
     term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
       if (e.type === "keydown" && (e.ctrlKey || e.metaKey) && e.key === "v") {
-        handleCtrlV(ws);
-        return false; // Block xterm from sending \x16
+        return false; // Block xterm, let browser fire paste event naturally
       }
       return true;
     });
 
-    async function handleCtrlV(websocket: WebSocket) {
-      try {
-        const items = await navigator.clipboard.read();
-        for (const item of items) {
-          const imageType = item.types.find((t) => t.startsWith("image/"));
-          if (imageType) {
-            const blob = await item.getType(imageType);
-            const reader = new FileReader();
-            reader.onload = () => {
-              const base64 = (reader.result as string).split(",")[1];
-              if (websocket.readyState === WebSocket.OPEN) {
-                websocket.send(JSON.stringify({ type: "image", data: base64 }));
-              }
-            };
-            reader.readAsDataURL(blob);
-            return;
-          }
-        }
-        // No image found — paste as text
-        const text = await navigator.clipboard.readText();
-        if (text && websocket.readyState === WebSocket.OPEN) {
-          websocket.send(JSON.stringify({ type: "input", data: text }));
-        }
-      } catch {
-        // Fallback: try readText only
-        try {
-          const text = await navigator.clipboard.readText();
-          if (text && websocket.readyState === WebSocket.OPEN) {
-            websocket.send(JSON.stringify({ type: "input", data: text }));
-          }
-        } catch {
-          // Clipboard access denied — silently fail
+    // Intercept paste event in CAPTURE phase (before xterm's handler)
+    // paste event has fresh, synchronous clipboard data — no stale cache issues
+    const handlePaste = (e: ClipboardEvent) => {
+      if (!e.clipboardData) return;
+
+      const items = e.clipboardData.items;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith("image/")) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          const blob = items[i].getAsFile();
+          if (!blob) return;
+          const reader = new FileReader();
+          reader.onload = () => {
+            const base64 = (reader.result as string).split(",")[1];
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: "image", data: base64 }));
+            }
+          };
+          reader.readAsDataURL(blob);
+          return;
         }
       }
-    }
+      // No image — let paste event propagate to xterm for normal text paste
+    };
+    terminalRef.current.addEventListener("paste", handlePaste, true);
 
     const handleResize = () => {
       fitAddon.fit();
@@ -206,7 +196,9 @@ export default function Terminal({ sessionId, fullscreen, onConnectionChange }: 
       resizeObserver.observe(terminalRef.current);
     }
 
+    const containerEl = terminalRef.current;
     return () => {
+      containerEl?.removeEventListener("paste", handlePaste, true);
       resizeObserver.disconnect();
       ws.close();
       term.dispose();

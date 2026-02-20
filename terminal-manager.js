@@ -195,27 +195,31 @@ class TerminalManager {
             // Browser clipboard bridge: receive base64 image and put it into X11 clipboard
             const imgData = Buffer.from(message.data, "base64");
             try {
-              // Kill any previous xclip holding the clipboard
-              try { execSync('pkill -f "xclip -selection clipboard"', { timeout: 1000 }); } catch {}
+              // Kill previous xclip for THIS session (tracked by PID)
+              if (session._xclipPid) {
+                try { process.kill(session._xclipPid); } catch {}
+                session._xclipPid = null;
+              }
 
-              // Spawn xclip asynchronously (it stays alive as daemon to serve clipboard)
+              // Spawn xclip async — it stays alive as daemon serving clipboard
               const xclipProc = spawn('xclip', ['-selection', 'clipboard', '-t', 'image/png'], {
                 env: { ...process.env, DISPLAY: ':99' },
                 stdio: ['pipe', 'ignore', 'pipe'],
               });
 
+              session._xclipPid = xclipProc.pid;
+
               let xclipError = '';
-              xclipProc.stderr.on('data', (data) => { xclipError += data.toString(); });
+              xclipProc.stderr.on('data', (chunk) => { xclipError += chunk.toString(); });
 
               xclipProc.on('error', (err) => {
                 ws.send(JSON.stringify({ type: "output", data: `\r\n\x1b[31m✗ xclip error: ${err.message}\x1b[0m\r\n` }));
               });
 
-              // Pipe image data directly to xclip stdin
-              xclipProc.stdin.write(imgData);
-              xclipProc.stdin.end();
+              // Pipe image data to xclip stdin and close
+              xclipProc.stdin.end(imgData);
 
-              // Wait for xclip to register clipboard ownership, then trigger Ctrl+V
+              // After xclip takes clipboard ownership, send Ctrl+V to PTY
               setTimeout(() => {
                 if (xclipError) {
                   ws.send(JSON.stringify({ type: "output", data: `\r\n\x1b[31m✗ xclip: ${xclipError}\x1b[0m\r\n` }));
@@ -224,7 +228,7 @@ class TerminalManager {
                 if (!session.exited) {
                   session.pty.write('\x16');
                 }
-              }, 150);
+              }, 200);
             } catch (err) {
               ws.send(JSON.stringify({ type: "output", data: `\r\n\x1b[31m✗ Ошибка clipboard: ${err.message}\x1b[0m\r\n` }));
             }

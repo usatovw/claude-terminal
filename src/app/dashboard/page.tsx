@@ -35,6 +35,8 @@ export default function Dashboard() {
   >("idle");
   const [sessions, setSessions] = useState<Array<{sessionId: string; displayName: string | null; isActive: boolean}>>([]);
   const [viewMode, setViewMode] = useState<ViewMode>("terminal");
+  const [resumingSessionId, setResumingSessionId] = useState<string | null>(null);
+  const [creatingSession, setCreatingSession] = useState(false);
 
   const sessionCount = {
     total: sessions.length,
@@ -107,6 +109,7 @@ export default function Dashboard() {
   );
 
   const handleNewSession = useCallback(async () => {
+    setCreatingSession(true);
     try {
       const res = await fetch("/api/sessions", { method: "POST" });
       if (res.ok) {
@@ -119,6 +122,8 @@ export default function Dashboard() {
       }
     } catch {
       // Ignore
+    } finally {
+      setCreatingSession(false);
     }
   }, []);
 
@@ -142,18 +147,25 @@ export default function Dashboard() {
     }
   }, []);
 
-  const handleResumeSession = useCallback(async () => {
-    if (!activeSessionId) return;
-    await fetch(`/api/sessions/${activeSessionId}`, { method: "PUT" });
-    // Optimistically mark session as active so overlay hides immediately
-    setSessions((prev) =>
-      prev.map((s) =>
-        s.sessionId === activeSessionId ? { ...s, isActive: true } : s
-      )
-    );
-    setTerminalKey((k) => k + 1);
-    setConnectionStatus("idle");
-    setViewMode("terminal");
+  const handleResumeSession = useCallback(async (sessionId?: string) => {
+    const targetId = sessionId || activeSessionId;
+    if (!targetId) return;
+    setResumingSessionId(targetId);
+    try {
+      await fetch(`/api/sessions/${targetId}`, { method: "PUT" });
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.sessionId === targetId ? { ...s, isActive: true } : s
+        )
+      );
+      setActiveSessionId(targetId);
+      setTerminalKey((k) => k + 1);
+      setConnectionStatus("idle");
+      setMobileSidebarOpen(false);
+      setViewMode("terminal");
+    } finally {
+      setResumingSessionId(null);
+    }
   }, [activeSessionId]);
 
   return (
@@ -171,6 +183,9 @@ export default function Dashboard() {
             onSessionDeleted={handleSessionDeleted}
             onNewSession={handleNewSession}
             onOpenFiles={handleOpenFiles}
+            onResumeSession={handleResumeSession}
+            resumingSessionId={resumingSessionId}
+            creatingSession={creatingSession}
           />
         </div>
       )}
@@ -211,6 +226,8 @@ export default function Dashboard() {
                 onSessionDeleted={handleSessionDeleted}
                 onNewSession={handleNewSession}
                 onOpenFiles={handleOpenFiles}
+                onResumeSession={handleResumeSession}
+                resumingSessionId={resumingSessionId}
               />
             </motion.div>
           </>
@@ -264,6 +281,7 @@ export default function Dashboard() {
                   <StoppedSessionOverlay
                     sessionName={activeSessionName || activeSessionId}
                     onResume={handleResumeSession}
+                    resuming={resumingSessionId === activeSessionId}
                   />
                 </MovingBorderButton>
               </div>

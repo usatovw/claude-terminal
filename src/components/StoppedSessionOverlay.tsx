@@ -7,6 +7,7 @@ import { Play } from "@/components/Icons";
 interface StoppedSessionOverlayProps {
   sessionName: string | null;
   onResume: () => Promise<void>;
+  resuming?: boolean;
 }
 
 // Fake terminal content — looks like a Claude conversation with code
@@ -65,15 +66,17 @@ const TERMINAL_LINES = [
 export default function StoppedSessionOverlay({
   sessionName,
   onResume,
+  resuming: externalResuming,
 }: StoppedSessionOverlayProps) {
-  const [resuming, setResuming] = useState(false);
+  const [internalResuming, setInternalResuming] = useState(false);
+  const isResuming = externalResuming || internalResuming;
 
   const handleResume = async () => {
-    setResuming(true);
+    setInternalResuming(true);
     try {
       await onResume();
     } catch {
-      setResuming(false);
+      setInternalResuming(false);
     }
   };
 
@@ -111,22 +114,26 @@ export default function StoppedSessionOverlay({
           transition={{ duration: 0.5, delay: 0.3 }}
           className="flex flex-col items-center text-center max-w-sm"
         >
-          {/* Paused icon */}
+          {/* Icon */}
           <motion.div
             initial={{ scale: 0.8 }}
             animate={{ scale: 1 }}
             transition={{ duration: 0.4, delay: 0.4 }}
             className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-zinc-900/80 border border-zinc-800/50 flex items-center justify-center mb-5 md:mb-6"
           >
-            <div className="flex items-center gap-1.5">
-              <div className="w-1.5 h-6 md:h-7 rounded-full bg-violet-500/60" />
-              <div className="w-1.5 h-6 md:h-7 rounded-full bg-violet-500/60" />
-            </div>
+            {isResuming ? (
+              <div className="w-7 h-7 md:w-8 md:h-8 border-2 border-violet-500/30 border-t-violet-400 rounded-full animate-spin" />
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <div className="w-1.5 h-6 md:h-7 rounded-full bg-violet-500/60" />
+                <div className="w-1.5 h-6 md:h-7 rounded-full bg-violet-500/60" />
+              </div>
+            )}
           </motion.div>
 
           {/* Title */}
           <h2 className="text-lg md:text-xl font-medium text-zinc-200 mb-2">
-            Сессия остановлена
+            {isResuming ? "Возобновление..." : "Сессия остановлена"}
           </h2>
 
           {/* Session name */}
@@ -138,9 +145,10 @@ export default function StoppedSessionOverlay({
 
           {/* Description */}
           <p className="text-sm text-zinc-600 mb-6 md:mb-8 leading-relaxed">
-            Процесс CLI завершён. Возобновите сессию,
-            <br className="hidden md:block" />
-            {" "}чтобы продолжить работу.
+            {isResuming
+              ? "Запускаем CLI и подключаем терминал..."
+              : <>Процесс CLI завершён. Возобновите сессию,<br className="hidden md:block" />{" "}чтобы продолжить работу.</>
+            }
           </p>
 
           {/* Resume button */}
@@ -148,10 +156,10 @@ export default function StoppedSessionOverlay({
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={handleResume}
-            disabled={resuming}
+            disabled={isResuming}
             className="flex items-center gap-2.5 px-6 py-3 md:px-7 md:py-3 bg-violet-600 hover:bg-violet-500 disabled:bg-violet-600/50 text-white text-sm font-medium rounded-xl transition-all duration-200 cursor-pointer disabled:cursor-wait shadow-lg shadow-violet-500/20 hover:shadow-violet-500/30"
           >
-            {resuming ? (
+            {isResuming ? (
               <>
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 <span>Возобновление...</span>

@@ -22,6 +22,9 @@ interface SessionListProps {
   onSessionDeleted: (sessionId: string) => void;
   onNewSession: () => void;
   onOpenFiles?: (sessionId: string) => void;
+  onResumeSession?: (sessionId: string) => void;
+  resumingSessionId?: string | null;
+  creatingSession?: boolean;
 }
 
 export default function SessionList({
@@ -30,6 +33,9 @@ export default function SessionList({
   onSessionDeleted,
   onNewSession,
   onOpenFiles,
+  onResumeSession,
+  resumingSessionId,
+  creatingSession,
 }: SessionListProps) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -60,11 +66,11 @@ export default function SessionList({
     fetchSessions();
   };
 
-  const handleResume = async (sessionId: string, e: React.MouseEvent) => {
+  const handleResume = (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    await fetch(`/api/sessions/${sessionId}`, { method: "PUT" });
-    fetchSessions();
-    onSelectSession(sessionId);
+    if (onResumeSession) {
+      onResumeSession(sessionId);
+    }
   };
 
   const handleDeleteClick = (session: Session, e: React.MouseEvent) => {
@@ -122,9 +128,16 @@ export default function SessionList({
           as="button"
           containerClassName="w-full"
           className="w-full flex items-center justify-center gap-2 bg-zinc-950 text-white px-4 py-2 text-sm font-medium"
-          onClick={onNewSession}
+          onClick={creatingSession ? undefined : onNewSession}
         >
-          Новый чат
+          {creatingSession ? (
+            <>
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <span>Создание...</span>
+            </>
+          ) : (
+            "Новый чат"
+          )}
         </HoverBorderGradient>
       </div>
 
@@ -146,6 +159,7 @@ export default function SessionList({
                 key={session.sessionId}
                 session={session}
                 isSelected={activeSessionId === session.sessionId}
+                isResuming={resumingSessionId === session.sessionId}
                 editingId={editingId}
                 editName={editName}
                 onSelect={() => onSelectSession(session.sessionId)}
@@ -173,6 +187,7 @@ export default function SessionList({
                 key={session.sessionId}
                 session={session}
                 isSelected={activeSessionId === session.sessionId}
+                isResuming={resumingSessionId === session.sessionId}
                 editingId={editingId}
                 editName={editName}
                 onSelect={() => onSelectSession(session.sessionId)}
@@ -203,6 +218,7 @@ export default function SessionList({
 function SessionItem({
   session,
   isSelected,
+  isResuming,
   editingId,
   editName,
   onSelect,
@@ -217,6 +233,7 @@ function SessionItem({
 }: {
   session: Session;
   isSelected: boolean;
+  isResuming: boolean;
   editingId: string | null;
   editName: string;
   onSelect: () => void;
@@ -242,13 +259,17 @@ function SessionItem({
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          <span
-            className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-              session.isActive
-                ? "bg-emerald-400 shadow-sm shadow-emerald-400/50"
-                : "bg-zinc-600"
-            }`}
-          />
+          {isResuming ? (
+            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-emerald-400 animate-pulse" />
+          ) : (
+            <span
+              className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                session.isActive
+                  ? "bg-emerald-400 shadow-sm shadow-emerald-400/50"
+                  : "bg-zinc-600"
+              }`}
+            />
+          )}
           {isEditing ? (
             <input
               type="text"
@@ -269,7 +290,11 @@ function SessionItem({
 
         {/* Action buttons — always visible on mobile, hover on desktop */}
         <div className="flex items-center gap-1 md:gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex-shrink-0">
-          {session.isActive ? (
+          {isResuming ? (
+            <div className="p-2 md:p-1">
+              <div className="w-4 h-4 md:w-3.5 md:h-3.5 border-2 border-emerald-500/30 border-t-emerald-400 rounded-full animate-spin" />
+            </div>
+          ) : session.isActive ? (
             <button
               onClick={onStop}
               className="p-2 md:p-1 text-zinc-500 hover:text-amber-400 transition-colors cursor-pointer"

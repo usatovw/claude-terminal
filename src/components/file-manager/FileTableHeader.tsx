@@ -102,7 +102,7 @@ export default function FileTableHeader({
   return (
     <div
       ref={headerRef}
-      className="grid items-center border-b border-zinc-800/50 px-4 py-2 select-none"
+      className="grid items-center border-b border-zinc-800/50 px-2 md:px-4 py-2 select-none"
       style={{ gridTemplateColumns: columnWidths }}
     >
       {/* Checkbox */}
@@ -131,7 +131,7 @@ export default function FileTableHeader({
         </button>
         {/* Resize handle */}
         <div
-          className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-violet-500/30 transition-colors"
+          className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-violet-500/30 transition-colors hidden md:block"
           onMouseDown={(e) => {
             e.preventDefault();
             handleResize(0, e.clientX);
@@ -140,7 +140,7 @@ export default function FileTableHeader({
       </div>
 
       {/* Size */}
-      <div className="relative flex items-center justify-end">
+      <div className="relative hidden md:flex items-center justify-end">
         <button
           onClick={() => onSortChange("size")}
           className={`flex items-center gap-1 text-xs uppercase tracking-wider transition-colors cursor-pointer ${
@@ -161,7 +161,7 @@ export default function FileTableHeader({
       </div>
 
       {/* Date */}
-      <div className="relative flex items-center justify-end">
+      <div className="relative hidden md:flex items-center justify-end">
         <button
           onClick={() => onSortChange("modifiedAt")}
           className={`flex items-center gap-1 text-xs uppercase tracking-wider transition-colors cursor-pointer ${

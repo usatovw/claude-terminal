@@ -6,6 +6,9 @@ import FileToolbar, { SortField, SortDirection } from "@/components/file-manager
 import FileList from "@/components/file-manager/FileList";
 import DeleteConfirmModal from "@/components/file-manager/DeleteConfirmModal";
 import { FileEntry } from "@/components/file-manager/FileItem";
+import { useIsMobile } from "@/lib/useIsMobile";
+
+const MOBILE_COLUMNS = "32px 28px 1fr 80px";
 
 interface FileManagerProps {
   sessionId: string;
@@ -23,6 +26,8 @@ export default function FileManager({ sessionId }: FileManagerProps) {
   const [renameName, setRenameName] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState<string[] | null>(null);
   const [columnWidths, setColumnWidths] = useState("32px 28px 1fr 100px 140px 80px");
+  const isMobile = useIsMobile();
+  const effectiveColumns = isMobile ? MOBILE_COLUMNS : columnWidths;
   const [searchResults, setSearchResults] = useState<FileEntry[] | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -374,7 +379,7 @@ export default function FileManager({ sessionId }: FileManagerProps) {
           allSelected={allSelected}
           someSelected={someSelected}
           onSelectAll={handleSelectAll}
-          columnWidths={columnWidths}
+          columnWidths={effectiveColumns}
           onColumnResize={setColumnWidths}
           searchQuery={searchQuery}
           isRootPath={currentPath === "."}

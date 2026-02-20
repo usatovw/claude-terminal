@@ -27,7 +27,7 @@ export default function FileToolbar({
   return (
     <div className="flex flex-wrap items-center gap-2">
       {/* Search */}
-      <div className="relative flex-1 min-w-[140px] max-w-[250px]">
+      <div className="relative flex-1 min-w-[100px] max-w-none md:max-w-[250px]">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
         <input
           type="text"
@@ -42,7 +42,7 @@ export default function FileToolbar({
       {singleFolderSelected && (
         <button
           onClick={onEnterFolder}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-lg transition-colors cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-2 md:px-2.5 md:py-1.5 text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-lg transition-colors cursor-pointer"
           title="Войти в папку"
         >
           <FolderOpen className="w-3.5 h-3.5" />
@@ -54,7 +54,7 @@ export default function FileToolbar({
       {selectedCount > 0 && (
         <button
           onClick={onDownloadSelected}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-violet-400 hover:text-violet-300 bg-violet-500/10 border border-violet-500/20 rounded-lg transition-colors cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-2 md:px-2.5 md:py-1.5 text-xs text-violet-400 hover:text-violet-300 bg-violet-500/10 border border-violet-500/20 rounded-lg transition-colors cursor-pointer"
           title="Скачать выбранные"
         >
           <Download className="w-3.5 h-3.5" />
@@ -66,7 +66,7 @@ export default function FileToolbar({
       {selectedCount > 0 && (
         <button
           onClick={onDeleteSelected}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-red-400 hover:text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg transition-colors cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-2 md:px-2.5 md:py-1.5 text-xs text-red-400 hover:text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg transition-colors cursor-pointer"
           title="Удалить выбранные"
         >
           <Trash className="w-3.5 h-3.5" />

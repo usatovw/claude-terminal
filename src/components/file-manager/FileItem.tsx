@@ -92,7 +92,7 @@ export default function FileItem({
       transition={{ duration: 0.1 }}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
-      className={`grid items-center px-4 py-2 transition-all duration-150 group cursor-pointer ${
+      className={`grid items-center px-2 md:px-4 py-2.5 md:py-2 transition-all duration-150 group cursor-pointer ${
         isSelected
           ? "bg-gradient-to-r from-violet-500/10 to-indigo-500/10"
           : "hover:bg-zinc-800/50"
@@ -148,39 +148,39 @@ export default function FileItem({
       </div>
 
       {/* Size */}
-      <div className="text-xs text-zinc-600 text-right">
+      <div className="text-xs text-zinc-600 text-right hidden md:block">
         {entry.type === "file" ? formatFileSize(entry.size) : ""}
       </div>
 
       {/* Modified */}
-      <div className="text-xs text-zinc-600 text-right">
+      <div className="text-xs text-zinc-600 text-right hidden md:block">
         {relativeTime(entry.modifiedAt)}
       </div>
 
       {/* Actions */}
-      <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex items-center justify-end gap-1 md:gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
         {entry.type === "file" && (
           <button
             onClick={(e) => { e.stopPropagation(); onDownload(); }}
-            className="p-1 text-zinc-500 hover:text-violet-400 transition-colors cursor-pointer"
+            className="p-2 md:p-1 text-zinc-500 hover:text-violet-400 transition-colors cursor-pointer"
             title="Скачать"
           >
-            <Download className="w-3.5 h-3.5" />
+            <Download className="w-4 h-4 md:w-3.5 md:h-3.5" />
           </button>
         )}
         <button
           onClick={(e) => { e.stopPropagation(); onRenameStart(); }}
-          className="p-1 text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
+          className="p-2 md:p-1 text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
           title="Переименовать"
         >
-          <Pencil className="w-3.5 h-3.5" />
+          <Pencil className="w-4 h-4 md:w-3.5 md:h-3.5" />
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          className="p-1 text-zinc-500 hover:text-red-400 transition-colors cursor-pointer"
+          className="p-2 md:p-1 text-zinc-500 hover:text-red-400 transition-colors cursor-pointer"
           title="Удалить"
         >
-          <Trash className="w-3.5 h-3.5" />
+          <Trash className="w-4 h-4 md:w-3.5 md:h-3.5" />
         </button>
       </div>
     </motion.div>

@@ -7,9 +7,11 @@ Self-hosted web interface for [Claude Code CLI](https://docs.anthropic.com/en/do
 ## Features
 
 - **Full terminal in the browser** — xterm.js connected to real Claude CLI via WebSocket + node-pty
-- **Multi-session** — create, stop, resume, rename, delete sessions
+- **Multi-session** — create, stop, resume, rename, delete sessions with loading states
+- **File manager** — browse, download, rename, delete files in session directories; recursive search; bulk zip-download; resizable columns
+- **Stopped session overlay** — decorative terminal-style background with one-click resume
 - **Image paste** — Ctrl+V images from clipboard directly into Claude CLI (via X11 bridge)
-- **Mobile responsive** — sidebar drawer on mobile, full desktop layout
+- **Mobile-first** — adaptive layout throughout: sidebar drawer, touch-friendly targets, hidden columns on small screens
 - **Auth** — password login with bcrypt, JWT, rate limiting
 - **Single-user** — designed for personal use on your own server
 
@@ -72,8 +74,6 @@ sudo apt install -y xvfb xclip
 
 # Start virtual display
 Xvfb :99 -screen 0 1024x768x24 &
-
-# Make it persistent (add to /etc/rc.local or create a systemd service)
 ```
 
 <details>
@@ -161,6 +161,9 @@ Go to `https://your-domain.com`, login with the username/password you configured
 
 ```
 Browser (xterm.js) <--WebSocket--> server.js <--node-pty--> Claude CLI
+                                       |
+                                  Next.js API routes
+                                  (auth, sessions, files)
 ```
 
 1. **server.js** starts an HTTP server with Next.js + WebSocket support
@@ -169,25 +172,34 @@ Browser (xterm.js) <--WebSocket--> server.js <--node-pty--> Claude CLI
 4. **terminal-manager.js** spawns `claude` CLI in a pseudo-terminal (node-pty)
 5. Input/output is streamed between the browser and PTY in real-time
 6. Image paste uses an X11 clipboard bridge (Xvfb + xclip on DISPLAY :99)
+7. File manager reads session directories via REST API (browse, search, download, rename, delete)
 
 ## Project structure
 
 ```
-├── server.js                 # HTTP + WebSocket entry point
-├── terminal-manager.js       # PTY session lifecycle manager
-├── ecosystem.config.js       # PM2 config
+├── server.js                    # HTTP + WebSocket entry point
+├── terminal-manager.js          # PTY session lifecycle manager
+├── ecosystem.config.js          # PM2 config
 ├── src/
 │   ├── app/
-│   │   ├── page.tsx          # Login page
-│   │   ├── dashboard/        # Main dashboard
-│   │   └── api/              # Auth + session REST API
+│   │   ├── page.tsx             # Login page (Aurora background)
+│   │   ├── dashboard/page.tsx   # Main dashboard — sidebar + terminal + files
+│   │   └── api/
+│   │       ├── auth/            # Login, logout, ws-token endpoints
+│   │       └── sessions/        # Session CRUD + file operations API
 │   ├── components/
-│   │   ├── Terminal.tsx       # xterm.js client + clipboard bridge
-│   │   ├── SessionList.tsx   # Session sidebar
-│   │   ├── Navbar.tsx        # Top navigation bar
-│   │   └── ui/               # Aceternity UI components
+│   │   ├── Terminal.tsx          # xterm.js client + clipboard bridge
+│   │   ├── SessionList.tsx      # Session sidebar with actions
+│   │   ├── Navbar.tsx           # Top bar (session name, view toggle, status)
+│   │   ├── FileManager.tsx      # File browser with search, sort, bulk ops
+│   │   ├── StoppedSessionOverlay.tsx  # Resume screen for stopped sessions
+│   │   ├── file-manager/        # FileItem, FileList, FileTableHeader, etc.
+│   │   └── ui/                  # Aceternity UI components
 │   └── lib/
-│       └── auth.ts           # JWT + bcrypt helpers
+│       ├── auth.ts              # JWT + bcrypt helpers
+│       ├── files.ts             # Path sanitization for file API
+│       ├── utils.ts             # formatFileSize, relativeTime
+│       └── useIsMobile.ts       # Responsive breakpoint hook
 ```
 
 See [CLAUDE.md](CLAUDE.md) for detailed architecture documentation.
@@ -207,9 +219,11 @@ pm2 restart claude-terminal
 - Passwords stored as bcrypt hashes (one-way)
 - JWT tokens expire after `SESSION_TIMEOUT_HOURS`
 - Login rate-limited to 5 attempts per 15 minutes per IP
-- WebSocket connections require valid JWT
+- WebSocket connections require valid short-lived JWT
 - Cookies are httpOnly + secure + SameSite=strict in production
 - Server listens on 127.0.0.1 only (not exposed directly)
+- File API sandboxed to session project directories (path traversal protection)
+- HTML pages served with `no-cache` headers to prevent stale bundles after deploys
 
 ## License
 

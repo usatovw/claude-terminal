@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "motion/react";
 import Navbar, { ViewMode } from "@/components/Navbar";
@@ -14,6 +14,8 @@ import { FlipWords } from "@/components/ui/flip-words";
 import { Spotlight } from "@/components/ui/spotlight";
 import { HoverBorderGradient } from "@/components/ui/hover-border-gradient";
 import { Maximize, Minimize, X } from "@/components/Icons";
+import PresenceProvider, { usePresence } from "@/components/presence/PresenceProvider";
+import CursorOverlay from "@/components/presence/CursorOverlay";
 
 const Terminal = dynamic(() => import("@/components/Terminal"), {
   ssr: false,
@@ -25,6 +27,16 @@ const Terminal = dynamic(() => import("@/components/Terminal"), {
 });
 
 export default function Dashboard() {
+  return (
+    <PresenceProvider>
+      <DashboardInner />
+    </PresenceProvider>
+  );
+}
+
+function DashboardInner() {
+  const { joinSession: presenceJoin, sendCursor } = usePresence();
+  const contentRef = useRef<HTMLDivElement>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [terminalKey, setTerminalKey] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -77,6 +89,11 @@ export default function Dashboard() {
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [activeSessionId, connectionStatus]);
+
+  // Sync active session to presence
+  useEffect(() => {
+    if (activeSessionId) presenceJoin(activeSessionId);
+  }, [activeSessionId, presenceJoin]);
 
   // Escape to exit fullscreen
   useEffect(() => {
@@ -168,6 +185,22 @@ export default function Dashboard() {
     }
   }, [activeSessionId]);
 
+  const handleContentMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!contentRef.current) return;
+    const rect = contentRef.current.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    sendCursor(x, y);
+  }, [sendCursor]);
+
+  const handleContentTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!contentRef.current || !e.touches[0]) return;
+    const rect = contentRef.current.getBoundingClientRect();
+    const x = ((e.touches[0].clientX - rect.left) / rect.width) * 100;
+    const y = ((e.touches[0].clientY - rect.top) / rect.height) * 100;
+    sendCursor(x, y);
+  }, [sendCursor]);
+
   return (
     <div className="flex h-screen bg-black">
       {/* Desktop sidebar */}
@@ -247,11 +280,20 @@ export default function Dashboard() {
             onMenuClick={() => setMobileSidebarOpen(true)}
             viewMode={viewMode}
             onSwitchView={handleSwitchView}
+            onChatOpen={() => {
+              document.dispatchEvent(new CustomEvent("presence-chat-open"));
+            }}
           />
         )}
 
         {/* Content area */}
-        <div className="flex-1 relative">
+        <div
+          ref={contentRef}
+          className="flex-1 relative"
+          onMouseMove={handleContentMouseMove}
+          onTouchMove={handleContentTouchMove}
+        >
+          <CursorOverlay />
           {activeSessionId ? (
             viewMode === "files" ? (
               /* File Manager */

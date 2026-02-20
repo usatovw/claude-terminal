@@ -5,6 +5,7 @@ import { Pencil, Trash, Play, Pause, FolderIcon } from "@/components/Icons";
 import { HoverBorderGradient } from "@/components/ui/hover-border-gradient";
 import { relativeTime } from "@/lib/utils";
 import SessionDeleteModal from "@/components/SessionDeleteModal";
+import PresenceAvatars from "@/components/presence/PresenceAvatars";
 
 interface Session {
   sessionId: string;
@@ -342,6 +343,9 @@ function SessionItem({
         {session.displayName && (
           <span className="text-zinc-700">{session.sessionId}</span>
         )}
+        <div className="ml-auto">
+          <PresenceAvatars sessionId={session.sessionId} maxVisible={3} />
+        </div>
       </div>
     </div>
   );

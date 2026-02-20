@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Wifi, WifiOff, Menu, ChevronLeft, ChevronRight, TerminalIcon, FolderIcon } from "@/components/Icons";
+import { Wifi, WifiOff, Menu, ChevronLeft, ChevronRight, TerminalIcon, FolderIcon, MessageCircle } from "@/components/Icons";
 
 export type ViewMode = "terminal" | "files";
 
@@ -15,6 +15,7 @@ interface NavbarProps {
   onMenuClick?: () => void;
   viewMode?: ViewMode;
   onSwitchView?: (mode: ViewMode) => void;
+  onChatOpen?: () => void;
 }
 
 export default function Navbar({
@@ -27,6 +28,7 @@ export default function Navbar({
   onMenuClick,
   viewMode,
   onSwitchView,
+  onChatOpen,
 }: NavbarProps) {
   const router = useRouter();
 
@@ -99,6 +101,17 @@ export default function Navbar({
       </div>
 
       <div className="flex items-center gap-4">
+        {/* Mobile chat button */}
+        {onChatOpen && activeSessionId && (
+          <button
+            onClick={onChatOpen}
+            className="md:hidden p-2 text-zinc-500 hover:text-zinc-300 transition-colors"
+            title="Чат"
+          >
+            <MessageCircle className="w-5 h-5" />
+          </button>
+        )}
+
         {/* Session counter */}
         <span className="text-xs text-zinc-600 hidden sm:inline">
           {sessionCount.total > 0

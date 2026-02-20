@@ -30,7 +30,7 @@ export default function Navbar({
   };
 
   return (
-    <div className="h-12 border-b border-zinc-800/60 flex items-center justify-between px-3 md:px-5 bg-zinc-950/90 backdrop-blur-xl">
+    <div className="h-14 border-b border-zinc-800/60 flex items-center justify-between px-3 md:px-5 bg-zinc-950/90 backdrop-blur-xl">
       <div className="flex items-center gap-2">
         {/* Sidebar toggle — desktop only */}
         {onToggleSidebar && (

@@ -1,36 +1,216 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Claude Terminal
 
-## Getting Started
+Self-hosted web interface for [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code). Run Claude on your server, use it from any browser.
 
-First, run the development server:
+![Next.js](https://img.shields.io/badge/Next.js-16-black) ![node-pty](https://img.shields.io/badge/node--pty-terminal-green) ![License](https://img.shields.io/badge/license-MIT-blue)
+
+## Features
+
+- **Full terminal in the browser** — xterm.js connected to real Claude CLI via WebSocket + node-pty
+- **Multi-session** — create, stop, resume, rename, delete sessions
+- **Image paste** — Ctrl+V images from clipboard directly into Claude CLI (via X11 bridge)
+- **Mobile responsive** — sidebar drawer on mobile, full desktop layout
+- **Auth** — password login with bcrypt, JWT, rate limiting
+- **Single-user** — designed for personal use on your own server
+
+## Requirements
+
+- **VPS/server** with Linux (Ubuntu 22+ recommended)
+- **Node.js 18+**
+- **Claude CLI** installed and authenticated (`npm install -g @anthropic-ai/claude-code`, then `claude` to login)
+- **Active Anthropic subscription** (Claude Pro / Max / Team)
+- **Domain + SSL** (for secure clipboard access in the browser)
+
+## Quick Start
+
+### 1. Clone and install
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/YOUR_USERNAME/claude-terminal.git
+cd claude-terminal
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Configure environment
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+cp .env.example .env.local
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Generate your password hash and JWT secret:
 
-## Learn More
+```bash
+# Generate password hash (replace 'your_password' with your actual password)
+node -e "require('bcryptjs').hash('your_password', 12).then(console.log)"
 
-To learn more about Next.js, take a look at the following resources:
+# Generate JWT secret
+node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Edit `.env.local`:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```env
+LOGIN_USERNAME=admin
+PASSWORD_HASH=$2b$12$paste_your_hash_here
+JWT_SECRET=paste_your_64_byte_hex_here
+SESSION_TIMEOUT_HOURS=24
+```
 
-## Deploy on Vercel
+### 3. Build
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm run build
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 4. Set up Xvfb (for image clipboard bridge)
+
+Claude CLI reads images from X11 clipboard. Since the server is headless, we need a virtual display:
+
+```bash
+# Install
+sudo apt install -y xvfb xclip
+
+# Start virtual display
+Xvfb :99 -screen 0 1024x768x24 &
+
+# Make it persistent (add to /etc/rc.local or create a systemd service)
+```
+
+<details>
+<summary>Systemd service for Xvfb (recommended)</summary>
+
+```bash
+sudo tee /etc/systemd/system/xvfb.service << 'EOF'
+[Unit]
+Description=Virtual Framebuffer
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/Xvfb :99 -screen 0 1024x768x24
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl enable --now xvfb
+```
+
+</details>
+
+### 5. Run with PM2
+
+```bash
+# Install PM2
+npm install -g pm2
+
+# Edit ecosystem.config.js — update `cwd` path to your project directory
+# Start
+pm2 start ecosystem.config.js
+
+# Auto-start on reboot
+pm2 save
+pm2 startup
+```
+
+### 6. Nginx reverse proxy
+
+The app runs on `127.0.0.1:3000`. Set up Nginx to proxy with WebSocket support:
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name your-domain.com;
+
+    ssl_certificate /etc/letsencrypt/live/your-domain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/your-domain.com/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 86400;
+    }
+}
+
+server {
+    listen 80;
+    server_name your-domain.com;
+    return 301 https://$host$request_uri;
+}
+```
+
+Get SSL with Let's Encrypt:
+
+```bash
+sudo apt install certbot python3-certbot-nginx
+sudo certbot --nginx -d your-domain.com
+```
+
+### 7. Open in browser
+
+Go to `https://your-domain.com`, login with the username/password you configured, and start using Claude.
+
+## How it works
+
+```
+Browser (xterm.js) <--WebSocket--> server.js <--node-pty--> Claude CLI
+```
+
+1. **server.js** starts an HTTP server with Next.js + WebSocket support
+2. On login, a JWT token is issued and stored in an httpOnly cookie
+3. When a session is opened, xterm.js connects via WebSocket to the server
+4. **terminal-manager.js** spawns `claude` CLI in a pseudo-terminal (node-pty)
+5. Input/output is streamed between the browser and PTY in real-time
+6. Image paste uses an X11 clipboard bridge (Xvfb + xclip on DISPLAY :99)
+
+## Project structure
+
+```
+├── server.js                 # HTTP + WebSocket entry point
+├── terminal-manager.js       # PTY session lifecycle manager
+├── ecosystem.config.js       # PM2 config
+├── src/
+│   ├── app/
+│   │   ├── page.tsx          # Login page
+│   │   ├── dashboard/        # Main dashboard
+│   │   └── api/              # Auth + session REST API
+│   ├── components/
+│   │   ├── Terminal.tsx       # xterm.js client + clipboard bridge
+│   │   ├── SessionList.tsx   # Session sidebar
+│   │   ├── Navbar.tsx        # Top navigation bar
+│   │   └── ui/               # Aceternity UI components
+│   └── lib/
+│       └── auth.ts           # JWT + bcrypt helpers
+```
+
+See [CLAUDE.md](CLAUDE.md) for detailed architecture documentation.
+
+## Updating
+
+```bash
+git pull
+npm install
+npm run build
+pm2 restart claude-terminal
+```
+
+## Security notes
+
+- All secrets are in `.env.local` (never committed to git)
+- Passwords stored as bcrypt hashes (one-way)
+- JWT tokens expire after `SESSION_TIMEOUT_HOURS`
+- Login rate-limited to 5 attempts per 15 minutes per IP
+- WebSocket connections require valid JWT
+- Cookies are httpOnly + secure + SameSite=strict in production
+- Server listens on 127.0.0.1 only (not exposed directly)
+
+## License
+
+MIT

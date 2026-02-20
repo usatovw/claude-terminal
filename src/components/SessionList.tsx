@@ -121,14 +121,14 @@ export default function SessionList({
   return (
     <div className="flex flex-col h-full">
       {/* New session button */}
-      <div className="h-12 px-3 flex items-center border-b border-zinc-800/50">
+      <div className="h-14 px-3 flex items-center border-b border-zinc-800/50">
         <HoverBorderGradient
           as="button"
           containerClassName="w-full"
-          className="w-full flex items-center justify-center gap-2 bg-zinc-950 text-white px-4 py-1.5 text-xs font-medium"
+          className="w-full flex items-center justify-center gap-2 bg-zinc-950 text-white px-4 py-2 text-sm font-medium"
           onClick={onNewSession}
         >
-          Начать общение
+          Новый чат
         </HoverBorderGradient>
       </div>
 

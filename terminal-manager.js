@@ -1,7 +1,7 @@
 const pty = require("node-pty");
 const fs = require("fs");
 const path = require("path");
-const { execSync } = require("child_process");
+const { execSync, spawn } = require("child_process");
 
 const PTY_ENV = {
   ...process.env,
@@ -194,18 +194,37 @@ class TerminalManager {
           case "image": {
             // Browser clipboard bridge: receive base64 image and put it into X11 clipboard
             const imgData = Buffer.from(message.data, "base64");
-            const imgPath = `/tmp/clipboard-image-${Date.now()}.png`;
             try {
-              fs.writeFileSync(imgPath, imgData);
-              execSync(`xclip -selection clipboard -t image/png < "${imgPath}"`, {
-                env: { ...process.env, DISPLAY: ":99" },
-                timeout: 5000,
+              // Kill any previous xclip holding the clipboard
+              try { execSync('pkill -f "xclip -selection clipboard"', { timeout: 1000 }); } catch {}
+
+              // Spawn xclip asynchronously (it stays alive as daemon to serve clipboard)
+              const xclipProc = spawn('xclip', ['-selection', 'clipboard', '-t', 'image/png'], {
+                env: { ...process.env, DISPLAY: ':99' },
+                stdio: ['pipe', 'ignore', 'pipe'],
               });
-              ws.send(JSON.stringify({ type: "output", data: "\r\n\x1b[32m✓ Изображение загружено в clipboard\x1b[0m\r\n" }));
-              // Cleanup after a delay
+
+              let xclipError = '';
+              xclipProc.stderr.on('data', (data) => { xclipError += data.toString(); });
+
+              xclipProc.on('error', (err) => {
+                ws.send(JSON.stringify({ type: "output", data: `\r\n\x1b[31m✗ xclip error: ${err.message}\x1b[0m\r\n` }));
+              });
+
+              // Pipe image data directly to xclip stdin
+              xclipProc.stdin.write(imgData);
+              xclipProc.stdin.end();
+
+              // Wait for xclip to register clipboard ownership, then trigger Ctrl+V
               setTimeout(() => {
-                try { fs.unlinkSync(imgPath); } catch {}
-              }, 10000);
+                if (xclipError) {
+                  ws.send(JSON.stringify({ type: "output", data: `\r\n\x1b[31m✗ xclip: ${xclipError}\x1b[0m\r\n` }));
+                  return;
+                }
+                if (!session.exited) {
+                  session.pty.write('\x16');
+                }
+              }, 150);
             } catch (err) {
               ws.send(JSON.stringify({ type: "output", data: `\r\n\x1b[31m✗ Ошибка clipboard: ${err.message}\x1b[0m\r\n` }));
             }

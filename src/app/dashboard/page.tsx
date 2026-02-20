@@ -11,7 +11,7 @@ import { TextGenerateEffect } from "@/components/ui/text-generate-effect";
 import { FlipWords } from "@/components/ui/flip-words";
 import { Spotlight } from "@/components/ui/spotlight";
 import { HoverBorderGradient } from "@/components/ui/hover-border-gradient";
-import { ChevronLeft, ChevronRight, Maximize, Minimize, X } from "@/components/Icons";
+import { Maximize, Minimize, X } from "@/components/Icons";
 
 const Terminal = dynamic(() => import("@/components/Terminal"), {
   ssr: false,
@@ -31,28 +31,32 @@ export default function Dashboard() {
   const [connectionStatus, setConnectionStatus] = useState<
     "connected" | "disconnected" | "idle"
   >("idle");
-  const [sessionCount, setSessionCount] = useState({ total: 0, active: 0 });
+  const [sessions, setSessions] = useState<Array<{sessionId: string; displayName: string | null; isActive: boolean}>>([]);
 
-  // Fetch session counts
+  const sessionCount = {
+    total: sessions.length,
+    active: sessions.filter((s) => s.isActive).length,
+  };
+
+  const activeSessionName = activeSessionId
+    ? sessions.find((s) => s.sessionId === activeSessionId)?.displayName || null
+    : null;
+
+  // Fetch sessions
   useEffect(() => {
-    const fetchCounts = async () => {
+    const fetchSessions = async () => {
       try {
         const res = await fetch("/api/sessions");
         if (res.ok) {
           const data = await res.json();
-          setSessionCount({
-            total: data.sessions.length,
-            active: data.sessions.filter(
-              (s: { isActive: boolean }) => s.isActive
-            ).length,
-          });
+          setSessions(data.sessions);
         }
       } catch {
         // Ignore
       }
     };
-    fetchCounts();
-    const interval = setInterval(fetchCounts, 5000);
+    fetchSessions();
+    const interval = setInterval(fetchSessions, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -181,26 +185,13 @@ export default function Dashboard() {
         {!fullscreen && (
           <Navbar
             activeSessionId={activeSessionId}
+            activeSessionName={activeSessionName}
             connectionStatus={connectionStatus}
             sessionCount={sessionCount}
+            sidebarOpen={sidebarOpen}
+            onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
             onMenuClick={() => setMobileSidebarOpen(true)}
           />
-        )}
-
-        {/* Desktop sidebar toggle */}
-        {!fullscreen && (
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="hidden md:flex absolute top-3 z-20 items-center justify-center w-7 h-7 rounded-md text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800/80 transition-all"
-            style={{ left: sidebarOpen ? "calc(18rem + 4px)" : "4px" }}
-            title={sidebarOpen ? "Скрыть панель" : "Показать панель"}
-          >
-            {sidebarOpen ? (
-              <ChevronLeft className="w-4 h-4" />
-            ) : (
-              <ChevronRight className="w-4 h-4" />
-            )}
-          </button>
         )}
 
         {/* Terminal area */}

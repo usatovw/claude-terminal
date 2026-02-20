@@ -1,19 +1,25 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Wifi, WifiOff, Menu } from "@/components/Icons";
+import { Wifi, WifiOff, Menu, ChevronLeft, ChevronRight } from "@/components/Icons";
 
 interface NavbarProps {
   activeSessionId: string | null;
+  activeSessionName?: string | null;
   connectionStatus: "connected" | "disconnected" | "idle";
   sessionCount: { total: number; active: number };
+  sidebarOpen?: boolean;
+  onToggleSidebar?: () => void;
   onMenuClick?: () => void;
 }
 
 export default function Navbar({
   activeSessionId,
+  activeSessionName,
   connectionStatus,
   sessionCount,
+  sidebarOpen,
+  onToggleSidebar,
   onMenuClick,
 }: NavbarProps) {
   const router = useRouter();
@@ -25,7 +31,22 @@ export default function Navbar({
 
   return (
     <div className="h-12 border-b border-zinc-800/60 flex items-center justify-between px-3 md:px-5 bg-zinc-950/90 backdrop-blur-xl">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
+        {/* Sidebar toggle — desktop only */}
+        {onToggleSidebar && (
+          <button
+            onClick={onToggleSidebar}
+            className="hidden md:flex items-center justify-center w-7 h-7 rounded-md text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800/80 transition-all"
+            title={sidebarOpen ? "Скрыть панель" : "Показать панель"}
+          >
+            {sidebarOpen ? (
+              <ChevronLeft className="w-4 h-4" />
+            ) : (
+              <ChevronRight className="w-4 h-4" />
+            )}
+          </button>
+        )}
+
         {/* Hamburger — mobile only */}
         {onMenuClick && (
           <button
@@ -38,7 +59,7 @@ export default function Navbar({
 
         {activeSessionId && (
           <span className="text-sm text-zinc-500 font-mono truncate max-w-[150px] md:max-w-none">
-            {activeSessionId}
+            {activeSessionName || activeSessionId}
           </span>
         )}
       </div>

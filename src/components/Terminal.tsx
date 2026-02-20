@@ -8,9 +8,10 @@ import "@xterm/xterm/css/xterm.css";
 
 interface TerminalProps {
   sessionId: string;
+  onConnectionChange?: (status: "connected" | "disconnected") => void;
 }
 
-export default function Terminal({ sessionId }: TerminalProps) {
+export default function Terminal({ sessionId, onConnectionChange }: TerminalProps) {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -20,12 +21,10 @@ export default function Terminal({ sessionId }: TerminalProps) {
   const connectTerminal = useCallback(async () => {
     if (!terminalRef.current || !sessionId) return;
 
-    // Fetch short-lived WS token
     const tokenRes = await fetch("/api/auth/ws-token");
     if (!tokenRes.ok) return;
     const { token } = await tokenRes.json();
 
-    // Create xterm instance
     const term = new XTerm({
       cursorBlink: true,
       fontSize: 14,
@@ -63,7 +62,6 @@ export default function Terminal({ sessionId }: TerminalProps) {
     term.loadAddon(webLinksAddon);
     term.open(terminalRef.current);
 
-    // Small delay to ensure DOM is ready before fitting
     requestAnimationFrame(() => {
       fitAddon.fit();
     });
@@ -71,11 +69,14 @@ export default function Terminal({ sessionId }: TerminalProps) {
     xtermRef.current = term;
     fitAddonRef.current = fitAddon;
 
-    // Connect WebSocket
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}/api/terminal?sessionId=${encodeURIComponent(sessionId)}&token=${encodeURIComponent(token)}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
+
+    ws.onopen = () => {
+      onConnectionChange?.("connected");
+    };
 
     ws.onmessage = (event) => {
       try {
@@ -85,11 +86,18 @@ export default function Terminal({ sessionId }: TerminalProps) {
             term.write(message.data);
             break;
           case "exit":
-            term.write("\r\n\x1b[31m[Сессия завершена]\x1b[0m\r\n");
+            term.write(
+              "\r\n\x1b[90m--- Сессия остановлена ---\x1b[0m\r\n"
+            );
+            break;
+          case "stopped":
+            term.write(
+              "\x1b[90m--- Сессия остановлена. Нажмите \"Возобновить\" в боковой панели. ---\x1b[0m\r\n"
+            );
             break;
           case "error":
             term.write(
-              `\r\n\x1b[31mОшибка: ${message.message}\x1b[0m\r\n`
+              `\r\n\x1b[31m${message.message}\x1b[0m\r\n`
             );
             break;
         }
@@ -99,17 +107,15 @@ export default function Terminal({ sessionId }: TerminalProps) {
     };
 
     ws.onclose = () => {
-      term.write("\r\n\x1b[33m[Соединение разорвано]\x1b[0m\r\n");
+      onConnectionChange?.("disconnected");
     };
 
-    // Send user input
     term.onData((data) => {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "input", data }));
       }
     });
 
-    // Handle resize
     const handleResize = () => {
       fitAddon.fit();
       if (ws.readyState === WebSocket.OPEN) {
@@ -133,7 +139,7 @@ export default function Terminal({ sessionId }: TerminalProps) {
       ws.close();
       term.dispose();
     };
-  }, [sessionId]);
+  }, [sessionId, onConnectionChange]);
 
   useEffect(() => {
     if (initRef.current) return;

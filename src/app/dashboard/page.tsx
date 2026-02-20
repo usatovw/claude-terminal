@@ -3,8 +3,9 @@
 import { useState, useCallback, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "motion/react";
-import Navbar from "@/components/Navbar";
+import Navbar, { ViewMode } from "@/components/Navbar";
 import SessionList from "@/components/SessionList";
+import FileManager from "@/components/FileManager";
 import { Button as MovingBorderButton } from "@/components/ui/moving-border";
 import { TypewriterEffect } from "@/components/ui/typewriter-effect";
 import { TextGenerateEffect } from "@/components/ui/text-generate-effect";
@@ -32,6 +33,7 @@ export default function Dashboard() {
     "connected" | "disconnected" | "idle"
   >("idle");
   const [sessions, setSessions] = useState<Array<{sessionId: string; displayName: string | null; isActive: boolean}>>([]);
+  const [viewMode, setViewMode] = useState<ViewMode>("terminal");
 
   const sessionCount = {
     total: sessions.length,
@@ -87,6 +89,7 @@ export default function Dashboard() {
     setTerminalKey((k) => k + 1);
     setConnectionStatus("idle");
     setMobileSidebarOpen(false);
+    setViewMode("terminal");
   }, []);
 
   const handleSessionDeleted = useCallback(
@@ -94,6 +97,7 @@ export default function Dashboard() {
       if (activeSessionId === sessionId) {
         setActiveSessionId(null);
         setConnectionStatus("idle");
+        setViewMode("terminal");
       }
     },
     [activeSessionId]
@@ -108,6 +112,7 @@ export default function Dashboard() {
         setTerminalKey((k) => k + 1);
         setConnectionStatus("idle");
         setMobileSidebarOpen(false);
+        setViewMode("terminal");
       }
     } catch {
       // Ignore
@@ -120,6 +125,19 @@ export default function Dashboard() {
     },
     []
   );
+
+  const handleOpenFiles = useCallback((sessionId: string) => {
+    setActiveSessionId(sessionId);
+    setViewMode("files");
+    setMobileSidebarOpen(false);
+  }, []);
+
+  const handleSwitchView = useCallback((mode: ViewMode) => {
+    setViewMode(mode);
+    if (mode === "terminal") {
+      setTerminalKey((k) => k + 1);
+    }
+  }, []);
 
   return (
     <div className="flex h-screen bg-black">
@@ -135,6 +153,7 @@ export default function Dashboard() {
             onSelectSession={handleSelectSession}
             onSessionDeleted={handleSessionDeleted}
             onNewSession={handleNewSession}
+            onOpenFiles={handleOpenFiles}
           />
         </div>
       )}
@@ -174,6 +193,7 @@ export default function Dashboard() {
                 onSelectSession={handleSelectSession}
                 onSessionDeleted={handleSessionDeleted}
                 onNewSession={handleNewSession}
+                onOpenFiles={handleOpenFiles}
               />
             </motion.div>
           </>
@@ -191,42 +211,61 @@ export default function Dashboard() {
             sidebarOpen={sidebarOpen}
             onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
             onMenuClick={() => setMobileSidebarOpen(true)}
+            viewMode={viewMode}
+            onSwitchView={handleSwitchView}
           />
         )}
 
-        {/* Terminal area */}
+        {/* Content area */}
         <div className="flex-1 relative">
           {activeSessionId ? (
-            <div className={`absolute inset-0 ${fullscreen ? "m-0" : "m-1 md:m-2"}`}>
-              {/* Fullscreen toggle */}
-              <button
-                onClick={() => setFullscreen(!fullscreen)}
-                className="absolute top-2 right-2 z-10 p-2 md:p-1.5 text-zinc-600 hover:text-zinc-300 transition-colors bg-zinc-900/80 rounded-md backdrop-blur-sm"
-                title={fullscreen ? "Выйти из полноэкранного" : "Полноэкранный режим"}
-              >
-                {fullscreen ? (
-                  <Minimize className="w-5 h-5 md:w-4 md:h-4" />
-                ) : (
-                  <Maximize className="w-5 h-5 md:w-4 md:h-4" />
-                )}
-              </button>
+            viewMode === "files" ? (
+              /* File Manager */
+              <div className="absolute inset-0 m-1 md:m-2">
+                <MovingBorderButton
+                  as="div"
+                  borderRadius="0.75rem"
+                  containerClassName="w-full h-full"
+                  borderClassName="bg-[radial-gradient(var(--violet-500)_40%,transparent_60%)]"
+                  className="w-full h-full bg-[#0a0a0a] p-0 overflow-hidden"
+                  duration={8000}
+                >
+                  <FileManager sessionId={activeSessionId} />
+                </MovingBorderButton>
+              </div>
+            ) : (
+              /* Terminal */
+              <div className={`absolute inset-0 ${fullscreen ? "m-0" : "m-1 md:m-2"}`}>
+                {/* Fullscreen toggle */}
+                <button
+                  onClick={() => setFullscreen(!fullscreen)}
+                  className="absolute top-2 right-2 z-10 p-2 md:p-1.5 text-zinc-600 hover:text-zinc-300 transition-colors bg-zinc-900/80 rounded-md backdrop-blur-sm cursor-pointer"
+                  title={fullscreen ? "Выйти из полноэкранного" : "Полноэкранный режим"}
+                >
+                  {fullscreen ? (
+                    <Minimize className="w-5 h-5 md:w-4 md:h-4" />
+                  ) : (
+                    <Maximize className="w-5 h-5 md:w-4 md:h-4" />
+                  )}
+                </button>
 
-              <MovingBorderButton
-                as="div"
-                borderRadius="0.75rem"
-                containerClassName="w-full h-full"
-                borderClassName="bg-[radial-gradient(var(--violet-500)_40%,transparent_60%)]"
-                className="w-full h-full bg-[#0a0a0a] p-0 overflow-hidden"
-                duration={8000}
-              >
-                <Terminal
-                  key={terminalKey}
-                  sessionId={activeSessionId}
-                  fullscreen={fullscreen}
-                  onConnectionChange={handleConnectionChange}
-                />
-              </MovingBorderButton>
-            </div>
+                <MovingBorderButton
+                  as="div"
+                  borderRadius="0.75rem"
+                  containerClassName="w-full h-full"
+                  borderClassName="bg-[radial-gradient(var(--violet-500)_40%,transparent_60%)]"
+                  className="w-full h-full bg-[#0a0a0a] p-0 overflow-hidden"
+                  duration={8000}
+                >
+                  <Terminal
+                    key={terminalKey}
+                    sessionId={activeSessionId}
+                    fullscreen={fullscreen}
+                    onConnectionChange={handleConnectionChange}
+                  />
+                </MovingBorderButton>
+              </div>
+            )
           ) : (
             <div className="flex items-center justify-center h-full relative overflow-hidden px-4">
               {/* Spotlight background */}

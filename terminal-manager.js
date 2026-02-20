@@ -291,6 +291,16 @@ class TerminalManager {
     return safeName;
   }
 
+  getSession(sessionId) {
+    const session = this.sessions.get(sessionId);
+    if (!session) return null;
+    return {
+      sessionId,
+      projectDir: session.projectDir,
+      isActive: !session.exited,
+    };
+  }
+
   listSessions() {
     const result = [];
     for (const [id, session] of this.sessions) {

@@ -1,7 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Wifi, WifiOff, Menu, ChevronLeft, ChevronRight } from "@/components/Icons";
+import { Wifi, WifiOff, Menu, ChevronLeft, ChevronRight, TerminalIcon, Files } from "@/components/Icons";
+
+export type ViewMode = "terminal" | "files";
 
 interface NavbarProps {
   activeSessionId: string | null;
@@ -11,6 +13,8 @@ interface NavbarProps {
   sidebarOpen?: boolean;
   onToggleSidebar?: () => void;
   onMenuClick?: () => void;
+  viewMode?: ViewMode;
+  onSwitchView?: (mode: ViewMode) => void;
 }
 
 export default function Navbar({
@@ -21,6 +25,8 @@ export default function Navbar({
   sidebarOpen,
   onToggleSidebar,
   onMenuClick,
+  viewMode,
+  onSwitchView,
 }: NavbarProps) {
   const router = useRouter();
 
@@ -36,7 +42,7 @@ export default function Navbar({
         {onToggleSidebar && (
           <button
             onClick={onToggleSidebar}
-            className="hidden md:flex items-center justify-center w-7 h-7 rounded-md text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800/80 transition-all"
+            className="hidden md:flex items-center justify-center w-7 h-7 rounded-md text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800/80 transition-all cursor-pointer"
             title={sidebarOpen ? "Скрыть панель" : "Показать панель"}
           >
             {sidebarOpen ? (
@@ -61,6 +67,34 @@ export default function Navbar({
           <span className="text-sm text-zinc-500 font-mono truncate max-w-[150px] md:max-w-none">
             {activeSessionName || activeSessionId}
           </span>
+        )}
+
+        {/* View mode toggle */}
+        {activeSessionId && viewMode && onSwitchView && (
+          <div className="flex items-center gap-0.5 ml-2 bg-zinc-900/50 rounded-lg p-0.5 border border-zinc-800/50">
+            <button
+              onClick={() => onSwitchView("terminal")}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs transition-all cursor-pointer ${
+                viewMode === "terminal"
+                  ? "bg-violet-500/20 text-violet-300"
+                  : "text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              <TerminalIcon className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Терминал</span>
+            </button>
+            <button
+              onClick={() => onSwitchView("files")}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs transition-all cursor-pointer ${
+                viewMode === "files"
+                  ? "bg-violet-500/20 text-violet-300"
+                  : "text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              <Files className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Файлы</span>
+            </button>
+          </div>
         )}
       </div>
 

@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Pencil, Trash, Play, Pause } from "@/components/Icons";
+import { Pencil, Trash, Play, Pause, Files } from "@/components/Icons";
 import { HoverBorderGradient } from "@/components/ui/hover-border-gradient";
+import { relativeTime } from "@/lib/utils";
 
 interface Session {
   sessionId: string;
@@ -18,25 +19,7 @@ interface SessionListProps {
   onSelectSession: (sessionId: string) => void;
   onSessionDeleted: (sessionId: string) => void;
   onNewSession: () => void;
-}
-
-function relativeTime(dateStr: string): string {
-  const now = Date.now();
-  const then = new Date(dateStr).getTime();
-  const diff = now - then;
-
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return "только что";
-  if (minutes < 60) return `${minutes} мин назад`;
-
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} ч назад`;
-
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days} дн назад`;
-
-  const months = Math.floor(days / 30);
-  return `${months} мес назад`;
+  onOpenFiles?: (sessionId: string) => void;
 }
 
 export default function SessionList({
@@ -44,6 +27,7 @@ export default function SessionList({
   onSelectSession,
   onSessionDeleted,
   onNewSession,
+  onOpenFiles,
 }: SessionListProps) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -160,6 +144,7 @@ export default function SessionList({
                 onEditNameChange={setEditName}
                 onRenameSubmit={() => handleRenameSubmit(session.sessionId)}
                 onRenameKeyDown={(e) => handleRenameKeyDown(e, session.sessionId)}
+                onOpenFiles={onOpenFiles ? (e) => { e.stopPropagation(); onOpenFiles(session.sessionId); } : undefined}
               />
             ))}
           </div>
@@ -186,6 +171,7 @@ export default function SessionList({
                 onEditNameChange={setEditName}
                 onRenameSubmit={() => handleRenameSubmit(session.sessionId)}
                 onRenameKeyDown={(e) => handleRenameKeyDown(e, session.sessionId)}
+                onOpenFiles={onOpenFiles ? (e) => { e.stopPropagation(); onOpenFiles(session.sessionId); } : undefined}
               />
             ))}
           </div>
@@ -208,6 +194,7 @@ function SessionItem({
   onEditNameChange,
   onRenameSubmit,
   onRenameKeyDown,
+  onOpenFiles,
 }: {
   session: Session;
   isSelected: boolean;
@@ -221,6 +208,7 @@ function SessionItem({
   onEditNameChange: (v: string) => void;
   onRenameSubmit: () => void;
   onRenameKeyDown: (e: React.KeyboardEvent) => void;
+  onOpenFiles?: (e: React.MouseEvent) => void;
 }) {
   const isEditing = editingId === session.sessionId;
 
@@ -265,7 +253,7 @@ function SessionItem({
           {session.isActive ? (
             <button
               onClick={onStop}
-              className="p-2 md:p-1 text-zinc-500 hover:text-amber-400 transition-colors"
+              className="p-2 md:p-1 text-zinc-500 hover:text-amber-400 transition-colors cursor-pointer"
               title="Остановить"
             >
               <Pause className="w-4 h-4 md:w-3.5 md:h-3.5" />
@@ -273,22 +261,31 @@ function SessionItem({
           ) : (
             <button
               onClick={onResume}
-              className="p-2 md:p-1 text-zinc-500 hover:text-emerald-400 transition-colors"
+              className="p-2 md:p-1 text-zinc-500 hover:text-emerald-400 transition-colors cursor-pointer"
               title="Возобновить"
             >
               <Play className="w-4 h-4 md:w-3.5 md:h-3.5" />
             </button>
           )}
+          {onOpenFiles && (
+            <button
+              onClick={onOpenFiles}
+              className="p-2 md:p-1 text-zinc-500 hover:text-violet-400 transition-colors cursor-pointer"
+              title="Файлы"
+            >
+              <Files className="w-4 h-4 md:w-3.5 md:h-3.5" />
+            </button>
+          )}
           <button
             onClick={onRenameStart}
-            className="p-2 md:p-1 text-zinc-500 hover:text-zinc-300 transition-colors"
+            className="p-2 md:p-1 text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
             title="Переименовать"
           >
             <Pencil className="w-4 h-4 md:w-3.5 md:h-3.5" />
           </button>
           <button
             onClick={onDelete}
-            className="p-2 md:p-1 text-zinc-500 hover:text-red-400 transition-colors"
+            className="p-2 md:p-1 text-zinc-500 hover:text-red-400 transition-colors cursor-pointer"
             title="Удалить"
           >
             <Trash className="w-4 h-4 md:w-3.5 md:h-3.5" />

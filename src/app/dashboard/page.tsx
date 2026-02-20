@@ -24,6 +24,12 @@ export default function Dashboard() {
     setTerminalKey((k) => k + 1);
   }, []);
 
+  const handleSessionDeleted = useCallback((sessionId: string) => {
+    if (activeSessionId === sessionId) {
+      setActiveSessionId(null);
+    }
+  }, [activeSessionId]);
+
   const handleNewSession = useCallback(async () => {
     try {
       const res = await fetch("/api/sessions", { method: "POST" });
@@ -48,6 +54,7 @@ export default function Dashboard() {
         <SessionList
           activeSessionId={activeSessionId}
           onSelectSession={handleSelectSession}
+          onSessionDeleted={handleSessionDeleted}
           onNewSession={handleNewSession}
         />
       </div>

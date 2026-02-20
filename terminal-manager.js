@@ -138,11 +138,53 @@ class TerminalManager {
     return false;
   }
 
+  deleteSession(sessionId) {
+    const session = this.sessions.get(sessionId);
+    if (!session) return false;
+
+    // Kill process if still running
+    if (!session.exited) {
+      session.pty.kill();
+      session.exited = true;
+    }
+
+    // Close all connected clients
+    for (const client of session.connectedClients) {
+      if (client.readyState === 1) {
+        client.send(JSON.stringify({ type: "exit", exitCode: 0, signal: 0 }));
+      }
+      client.close();
+    }
+
+    // Remove project directory
+    try {
+      fs.rmSync(session.projectDir, { recursive: true, force: true });
+    } catch {
+      // Directory might not exist
+    }
+
+    this.sessions.delete(sessionId);
+    return true;
+  }
+
+  renameSession(sessionId, newName) {
+    const session = this.sessions.get(sessionId);
+    if (!session) return null;
+
+    // Sanitize name — allow letters, digits, hyphens, underscores, spaces
+    const safeName = newName.replace(/[^a-zA-Zа-яА-ЯёЁ0-9\-_ ]/g, "").trim();
+    if (!safeName) return null;
+
+    session.displayName = safeName;
+    return safeName;
+  }
+
   listSessions() {
     const result = [];
     for (const [id, session] of this.sessions) {
       result.push({
         sessionId: id,
+        displayName: session.displayName || null,
         projectDir: session.projectDir,
         createdAt: session.createdAt,
         isActive: !session.exited,

@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "motion/react";
 import Navbar, { ViewMode } from "@/components/Navbar";
 import SessionList from "@/components/SessionList";
 import FileManager from "@/components/FileManager";
+import StoppedSessionOverlay from "@/components/StoppedSessionOverlay";
 import { Button as MovingBorderButton } from "@/components/ui/moving-border";
 import { TypewriterEffect } from "@/components/ui/typewriter-effect";
 import { TextGenerateEffect } from "@/components/ui/text-generate-effect";
@@ -40,9 +41,11 @@ export default function Dashboard() {
     active: sessions.filter((s) => s.isActive).length,
   };
 
-  const activeSessionName = activeSessionId
-    ? sessions.find((s) => s.sessionId === activeSessionId)?.displayName || null
+  const activeSession = activeSessionId
+    ? sessions.find((s) => s.sessionId === activeSessionId)
     : null;
+  const activeSessionName = activeSession?.displayName || null;
+  const isActiveSessionStopped = activeSession ? !activeSession.isActive : false;
 
   // Fetch sessions
   useEffect(() => {
@@ -139,6 +142,14 @@ export default function Dashboard() {
     }
   }, []);
 
+  const handleResumeSession = useCallback(async () => {
+    if (!activeSessionId) return;
+    await fetch(`/api/sessions/${activeSessionId}`, { method: "PUT" });
+    setTerminalKey((k) => k + 1);
+    setConnectionStatus("idle");
+    setViewMode("terminal");
+  }, [activeSessionId]);
+
   return (
     <div className="flex h-screen bg-black">
       {/* Desktop sidebar */}
@@ -231,6 +242,23 @@ export default function Dashboard() {
                   duration={8000}
                 >
                   <FileManager sessionId={activeSessionId} />
+                </MovingBorderButton>
+              </div>
+            ) : isActiveSessionStopped ? (
+              /* Stopped session overlay */
+              <div className="absolute inset-0 m-1 md:m-2">
+                <MovingBorderButton
+                  as="div"
+                  borderRadius="0.75rem"
+                  containerClassName="w-full h-full"
+                  borderClassName="bg-[radial-gradient(var(--violet-500)_40%,transparent_60%)]"
+                  className="w-full h-full bg-[#0a0a0a] p-0 overflow-hidden"
+                  duration={8000}
+                >
+                  <StoppedSessionOverlay
+                    sessionName={activeSessionName || activeSessionId}
+                    onResume={handleResumeSession}
+                  />
                 </MovingBorderButton>
               </div>
             ) : (

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useRef, useEffect } from "react";
 import { motion } from "motion/react";
-import { FolderIcon, FileIcon, Download, Pencil, Trash } from "@/components/Icons";
+import { FolderIcon, FileIcon, Download, Pencil, Trash, CheckSquare, Square } from "@/components/Icons";
 import { formatFileSize, relativeTime } from "@/lib/utils";
 
 export interface FileEntry {
@@ -16,9 +16,12 @@ export interface FileEntry {
 interface FileItemProps {
   entry: FileEntry;
   isSelected: boolean;
+  isChecked: boolean;
   isRenaming: boolean;
   renameName: string;
+  gridTemplateColumns: string;
   onSelect: (e: React.MouseEvent) => void;
+  onCheckboxChange: () => void;
   onNavigate: () => void;
   onDownload: () => void;
   onRenameStart: () => void;
@@ -31,9 +34,12 @@ interface FileItemProps {
 export default function FileItem({
   entry,
   isSelected,
+  isChecked,
   isRenaming,
   renameName,
+  gridTemplateColumns,
   onSelect,
+  onCheckboxChange,
   onNavigate,
   onDownload,
   onRenameStart,
@@ -43,12 +49,10 @@ export default function FileItem({
   onDelete,
 }: FileItemProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [clickTimeout, setClickTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (isRenaming && inputRef.current) {
       inputRef.current.focus();
-      // Select name without extension
       const dotIndex = renameName.lastIndexOf(".");
       if (dotIndex > 0 && entry.type === "file") {
         inputRef.current.setSelectionRange(0, dotIndex);
@@ -60,23 +64,17 @@ export default function FileItem({
 
   const handleClick = (e: React.MouseEvent) => {
     if (isRenaming) return;
+    if (e.detail === 1) {
+      onSelect(e);
+    }
+  };
 
-    if (clickTimeout) {
-      // Double click
-      clearTimeout(clickTimeout);
-      setClickTimeout(null);
-      if (entry.type === "directory") {
-        onNavigate();
-      } else {
-        onDownload();
-      }
+  const handleDoubleClick = () => {
+    if (isRenaming) return;
+    if (entry.type === "directory") {
+      onNavigate();
     } else {
-      // Single click — wait to see if it's a double click
-      const timeout = setTimeout(() => {
-        setClickTimeout(null);
-        onSelect(e);
-      }, 250);
-      setClickTimeout(timeout);
+      onDownload();
     }
   };
 
@@ -93,14 +91,28 @@ export default function FileItem({
       exit={{ opacity: 0, y: -10 }}
       transition={{ duration: 0.15 }}
       onClick={handleClick}
-      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 group cursor-pointer ${
+      onDoubleClick={handleDoubleClick}
+      className={`grid items-center px-3 py-2 rounded-lg transition-all duration-150 group cursor-pointer ${
         isSelected
           ? "bg-gradient-to-r from-violet-500/10 to-indigo-500/10 border border-violet-500/20"
           : "hover:bg-zinc-800/50 border border-transparent"
       }`}
+      style={{ gridTemplateColumns }}
     >
+      {/* Checkbox */}
+      <div
+        className="flex items-center justify-center"
+        onClick={(e) => { e.stopPropagation(); onCheckboxChange(); }}
+      >
+        {isChecked ? (
+          <CheckSquare className="w-4 h-4 text-violet-400" />
+        ) : (
+          <Square className="w-4 h-4 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+        )}
+      </div>
+
       {/* Icon */}
-      <div className="flex-shrink-0">
+      <div className="flex items-center justify-center">
         {entry.type === "directory" ? (
           <FolderIcon className="w-5 h-5 text-violet-400" />
         ) : (
@@ -109,7 +121,7 @@ export default function FileItem({
       </div>
 
       {/* Name */}
-      <div className="flex-1 min-w-0">
+      <div className="min-w-0 pr-2">
         {isRenaming ? (
           <input
             ref={inputRef}
@@ -129,17 +141,17 @@ export default function FileItem({
       </div>
 
       {/* Size */}
-      <div className="hidden sm:block text-xs text-zinc-600 w-20 text-right flex-shrink-0">
+      <div className="text-xs text-zinc-600 text-right">
         {entry.type === "file" ? formatFileSize(entry.size) : ""}
       </div>
 
       {/* Modified */}
-      <div className="hidden md:block text-xs text-zinc-600 w-24 text-right flex-shrink-0">
+      <div className="text-xs text-zinc-600 text-right">
         {relativeTime(entry.modifiedAt)}
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+      <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
         {entry.type === "file" && (
           <button
             onClick={(e) => { e.stopPropagation(); onDownload(); }}

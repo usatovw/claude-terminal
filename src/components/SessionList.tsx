@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Pencil, Trash, Play, Pause, Files } from "@/components/Icons";
+import { Pencil, Trash, Play, Pause, FolderIcon } from "@/components/Icons";
 import { HoverBorderGradient } from "@/components/ui/hover-border-gradient";
 import { relativeTime } from "@/lib/utils";
+import SessionDeleteModal from "@/components/SessionDeleteModal";
 
 interface Session {
   sessionId: string;
@@ -12,6 +13,7 @@ interface Session {
   createdAt: string;
   isActive: boolean;
   connectedClients: number;
+  hasFiles: boolean;
 }
 
 interface SessionListProps {
@@ -32,6 +34,7 @@ export default function SessionList({
   const [sessions, setSessions] = useState<Session[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<Session | null>(null);
 
   const fetchSessions = useCallback(async () => {
     try {
@@ -64,14 +67,23 @@ export default function SessionList({
     onSelectSession(sessionId);
   };
 
-  const handleDelete = async (sessionId: string, e: React.MouseEvent) => {
+  const handleDeleteClick = (session: Session, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm("Удалить сессию и все её данные?")) return;
-    const res = await fetch(`/api/sessions/${sessionId}`, { method: "DELETE" });
+    setDeleteTarget(session);
+  };
+
+  const handleDeleteConfirm = async (deleteFiles: boolean) => {
+    if (!deleteTarget) return;
+    const keepFiles = !deleteFiles;
+    const res = await fetch(
+      `/api/sessions/${deleteTarget.sessionId}${keepFiles ? "?keepFiles=true" : ""}`,
+      { method: "DELETE" }
+    );
     if (res.ok) {
-      onSessionDeleted(sessionId);
+      onSessionDeleted(deleteTarget.sessionId);
       fetchSessions();
     }
+    setDeleteTarget(null);
   };
 
   const handleRenameStart = (session: Session, e: React.MouseEvent) => {
@@ -139,7 +151,7 @@ export default function SessionList({
                 onSelect={() => onSelectSession(session.sessionId)}
                 onStop={(e) => handleStop(session.sessionId, e)}
                 onResume={(e) => handleResume(session.sessionId, e)}
-                onDelete={(e) => handleDelete(session.sessionId, e)}
+                onDelete={(e) => handleDeleteClick(session, e)}
                 onRenameStart={(e) => handleRenameStart(session, e)}
                 onEditNameChange={setEditName}
                 onRenameSubmit={() => handleRenameSubmit(session.sessionId)}
@@ -166,7 +178,7 @@ export default function SessionList({
                 onSelect={() => onSelectSession(session.sessionId)}
                 onStop={(e) => handleStop(session.sessionId, e)}
                 onResume={(e) => handleResume(session.sessionId, e)}
-                onDelete={(e) => handleDelete(session.sessionId, e)}
+                onDelete={(e) => handleDeleteClick(session, e)}
                 onRenameStart={(e) => handleRenameStart(session, e)}
                 onEditNameChange={setEditName}
                 onRenameSubmit={() => handleRenameSubmit(session.sessionId)}
@@ -177,6 +189,13 @@ export default function SessionList({
           </div>
         )}
       </div>
+
+      <SessionDeleteModal
+        session={deleteTarget}
+        hasFiles={deleteTarget?.hasFiles ?? false}
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }
@@ -273,7 +292,7 @@ function SessionItem({
               className="p-2 md:p-1 text-zinc-500 hover:text-violet-400 transition-colors cursor-pointer"
               title="Файлы"
             >
-              <Files className="w-4 h-4 md:w-3.5 md:h-3.5" />
+              <FolderIcon className="w-4 h-4 md:w-3.5 md:h-3.5" />
             </button>
           )}
           <button

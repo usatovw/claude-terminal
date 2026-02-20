@@ -256,6 +256,10 @@ class TerminalManager {
     const session = this.sessions.get(sessionId);
     if (!session) return false;
 
+    // Safety check: projectDir must be inside DATA_DIR
+    const resolved = path.resolve(session.projectDir);
+    if (!resolved.startsWith(DATA_DIR + path.sep)) return false;
+
     if (!session.exited) {
       session.pty.kill();
       session.exited = true;
@@ -277,6 +281,39 @@ class TerminalManager {
     this.sessions.delete(sessionId);
     this._saveSessions();
     return true;
+  }
+
+  deleteSessionKeepFiles(sessionId) {
+    const session = this.sessions.get(sessionId);
+    if (!session) return false;
+
+    if (!session.exited) {
+      session.pty.kill();
+      session.exited = true;
+    }
+
+    for (const client of session.connectedClients) {
+      if (client.readyState === 1) {
+        client.send(JSON.stringify({ type: "exit", exitCode: 0, signal: 0 }));
+      }
+      client.close();
+    }
+
+    // Do NOT delete projectDir — keep files
+    this.sessions.delete(sessionId);
+    this._saveSessions();
+    return true;
+  }
+
+  sessionHasFiles(sessionId) {
+    const session = this.sessions.get(sessionId);
+    if (!session) return false;
+    try {
+      const entries = fs.readdirSync(session.projectDir).filter((e) => !e.startsWith("."));
+      return entries.length > 0;
+    } catch {
+      return false;
+    }
   }
 
   renameSession(sessionId, newName) {
@@ -304,6 +341,13 @@ class TerminalManager {
   listSessions() {
     const result = [];
     for (const [id, session] of this.sessions) {
+      let hasFiles = false;
+      try {
+        const entries = fs.readdirSync(session.projectDir).filter((e) => !e.startsWith("."));
+        hasFiles = entries.length > 0;
+      } catch {
+        // Directory might not exist
+      }
       result.push({
         sessionId: id,
         displayName: session.displayName || null,
@@ -311,6 +355,7 @@ class TerminalManager {
         createdAt: session.createdAt,
         isActive: !session.exited,
         connectedClients: session.connectedClients.size,
+        hasFiles,
       });
     }
     return result;

@@ -6,7 +6,6 @@ import FileToolbar, { SortField, SortDirection } from "@/components/file-manager
 import FileList from "@/components/file-manager/FileList";
 import DeleteConfirmModal from "@/components/file-manager/DeleteConfirmModal";
 import { FileEntry } from "@/components/file-manager/FileItem";
-import path from "path";
 
 interface FileManagerProps {
   sessionId: string;
@@ -23,6 +22,7 @@ export default function FileManager({ sessionId }: FileManagerProps) {
   const [renamingEntry, setRenamingEntry] = useState<string | null>(null);
   const [renameName, setRenameName] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState<string[] | null>(null);
+  const [columnWidths, setColumnWidths] = useState("32px 28px 1fr 100px 140px 80px");
 
   const fetchEntries = useCallback(async () => {
     setLoading(true);
@@ -53,13 +53,11 @@ export default function FileManager({ sessionId }: FileManagerProps) {
   const processedEntries = useMemo(() => {
     let filtered = entries;
 
-    // Search filter
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       filtered = entries.filter((e) => e.name.toLowerCase().includes(q));
     }
 
-    // Separate directories and files
     const dirs = filtered.filter((e) => e.type === "directory");
     const files = filtered.filter((e) => e.type === "file");
 
@@ -87,6 +85,16 @@ export default function FileManager({ sessionId }: FileManagerProps) {
     return [...dirs, ...files];
   }, [entries, searchQuery, sortBy, sortDir]);
 
+  const singleFolderSelected = useMemo(() => {
+    if (selectedPaths.size !== 1) return false;
+    const name = [...selectedPaths][0];
+    const entry = processedEntries.find((e) => e.name === name);
+    return entry?.type === "directory" || false;
+  }, [selectedPaths, processedEntries]);
+
+  const allSelected = processedEntries.length > 0 && selectedPaths.size === processedEntries.length;
+  const someSelected = selectedPaths.size > 0 && !allSelected;
+
   const handleNavigate = useCallback(
     (name: string) => {
       if (name === ".") {
@@ -109,11 +117,9 @@ export default function FileManager({ sessionId }: FileManagerProps) {
       setSelectedPaths((prev) => {
         const next = new Set(prev);
         if (e.ctrlKey || e.metaKey) {
-          // Toggle
           if (next.has(name)) next.delete(name);
           else next.add(name);
         } else {
-          // Single select
           if (next.has(name) && next.size === 1) {
             next.clear();
           } else {
@@ -126,6 +132,15 @@ export default function FileManager({ sessionId }: FileManagerProps) {
     },
     []
   );
+
+  const handleCheckboxChange = useCallback((name: string) => {
+    setSelectedPaths((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }, []);
 
   const handleSelectAll = useCallback(() => {
     if (selectedPaths.size === processedEntries.length && processedEntries.length > 0) {
@@ -147,11 +162,15 @@ export default function FileManager({ sessionId }: FileManagerProps) {
     [sortBy]
   );
 
-  // Build the full relative path for a file
+  const handleEnterFolder = useCallback(() => {
+    if (selectedPaths.size !== 1) return;
+    const name = [...selectedPaths][0];
+    handleNavigate(name);
+  }, [selectedPaths, handleNavigate]);
+
   const fullPath = (name: string) =>
     currentPath === "." ? name : currentPath + "/" + name;
 
-  // Download single file
   const handleDownload = useCallback(
     (name: string) => {
       const p = fullPath(name);
@@ -166,11 +185,9 @@ export default function FileManager({ sessionId }: FileManagerProps) {
     [sessionId, currentPath]
   );
 
-  // Download selected as zip
   const handleDownloadSelected = useCallback(async () => {
     const paths = [...selectedPaths].map((name) => fullPath(name));
     if (paths.length === 1) {
-      // Check if it's a file — just download directly
       const entry = entries.find((e) => e.name === [...selectedPaths][0]);
       if (entry && entry.type === "file") {
         handleDownload([...selectedPaths][0]);
@@ -266,14 +283,11 @@ export default function FileManager({ sessionId }: FileManagerProps) {
         <FileToolbar
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
-          sortBy={sortBy}
-          sortDir={sortDir}
-          onSortChange={handleSortChange}
           selectedCount={selectedPaths.size}
-          totalCount={processedEntries.length}
-          onSelectAll={handleSelectAll}
           onDownloadSelected={handleDownloadSelected}
           onDeleteSelected={handleDeleteSelected}
+          singleFolderSelected={singleFolderSelected}
+          onEnterFolder={handleEnterFolder}
         />
       </div>
 
@@ -285,6 +299,7 @@ export default function FileManager({ sessionId }: FileManagerProps) {
           renamingEntry={renamingEntry}
           renameName={renameName}
           onSelect={handleSelect}
+          onCheckboxChange={handleCheckboxChange}
           onNavigate={handleNavigate}
           onDownload={handleDownload}
           onRenameStart={handleRenameStart}
@@ -293,6 +308,14 @@ export default function FileManager({ sessionId }: FileManagerProps) {
           onRenameCancel={handleRenameCancel}
           onDelete={handleDeleteSingle}
           loading={loading}
+          sortBy={sortBy}
+          sortDir={sortDir}
+          onSortChange={handleSortChange}
+          allSelected={allSelected}
+          someSelected={someSelected}
+          onSelectAll={handleSelectAll}
+          columnWidths={columnWidths}
+          onColumnResize={setColumnWidths}
         />
       </div>
 

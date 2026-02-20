@@ -4,6 +4,7 @@ import { verifyToken } from "@/lib/auth";
 interface TerminalManager {
   stopSession: (id: string) => boolean;
   deleteSession: (id: string) => boolean;
+  deleteSessionKeepFiles: (id: string) => boolean;
   renameSession: (id: string, name: string) => string | null;
   resumeSession: (id: string) => { ok: boolean; error?: string };
 }
@@ -26,7 +27,9 @@ export async function DELETE(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await params;
-  const { action } = Object.fromEntries(new URL(request.url).searchParams);
+  const searchParams = new URL(request.url).searchParams;
+  const action = searchParams.get("action");
+  const keepFiles = searchParams.get("keepFiles");
 
   if (action === "stop") {
     const stopped = getTM().stopSession(id);
@@ -34,7 +37,9 @@ export async function DELETE(
     return NextResponse.json({ error: "Session not found or already stopped" }, { status: 404 });
   }
 
-  const deleted = getTM().deleteSession(id);
+  const deleted = keepFiles === "true"
+    ? getTM().deleteSessionKeepFiles(id)
+    : getTM().deleteSession(id);
   if (deleted) return NextResponse.json({ success: true });
   return NextResponse.json({ error: "Session not found" }, { status: 404 });
 }

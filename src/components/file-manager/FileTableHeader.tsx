@@ -102,7 +102,7 @@ export default function FileTableHeader({
   return (
     <div
       ref={headerRef}
-      className="grid items-center border-b border-zinc-800/50 px-3 py-1.5 select-none"
+      className="grid items-center border-b border-zinc-800/50 px-4 py-2 select-none"
       style={{ gridTemplateColumns: columnWidths }}
     >
       {/* Checkbox */}

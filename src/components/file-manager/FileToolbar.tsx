@@ -42,7 +42,7 @@ export default function FileToolbar({
       {singleFolderSelected && (
         <button
           onClick={onEnterFolder}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-violet-400 hover:text-violet-300 bg-violet-500/10 border border-violet-500/20 rounded-lg transition-colors cursor-pointer"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-lg transition-colors cursor-pointer"
           title="Войти в папку"
         >
           <FolderOpen className="w-3.5 h-3.5" />

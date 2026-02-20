@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import Breadcrumbs from "@/components/file-manager/Breadcrumbs";
 import FileToolbar, { SortField, SortDirection } from "@/components/file-manager/FileToolbar";
 import FileList from "@/components/file-manager/FileList";
@@ -23,6 +23,9 @@ export default function FileManager({ sessionId }: FileManagerProps) {
   const [renameName, setRenameName] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState<string[] | null>(null);
   const [columnWidths, setColumnWidths] = useState("32px 28px 1fr 100px 140px 80px");
+  const [searchResults, setSearchResults] = useState<FileEntry[] | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchEntries = useCallback(async () => {
     setLoading(true);
@@ -47,19 +50,52 @@ export default function FileManager({ sessionId }: FileManagerProps) {
     setSelectedPaths(new Set());
     setRenamingEntry(null);
     setSearchQuery("");
+    setSearchResults(null);
   }, [fetchEntries]);
+
+  // Debounced recursive search
+  useEffect(() => {
+    if (searchTimerRef.current) {
+      clearTimeout(searchTimerRef.current);
+    }
+
+    if (!searchQuery.trim()) {
+      setSearchResults(null);
+      setSearchLoading(false);
+      return;
+    }
+
+    setSearchLoading(true);
+    searchTimerRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/sessions/${sessionId}/files?search=${encodeURIComponent(searchQuery.trim())}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setSearchResults(data.entries);
+        } else {
+          setSearchResults([]);
+        }
+      } catch {
+        setSearchResults([]);
+      }
+      setSearchLoading(false);
+    }, 300);
+
+    return () => {
+      if (searchTimerRef.current) {
+        clearTimeout(searchTimerRef.current);
+      }
+    };
+  }, [searchQuery, sessionId]);
 
   // Sort and filter entries
   const processedEntries = useMemo(() => {
-    let filtered = entries;
+    const source = searchResults ?? entries;
 
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      filtered = entries.filter((e) => e.name.toLowerCase().includes(q));
-    }
-
-    const dirs = filtered.filter((e) => e.type === "directory");
-    const files = filtered.filter((e) => e.type === "file");
+    const dirs = source.filter((e) => e.type === "directory");
+    const files = source.filter((e) => e.type === "file");
 
     const compare = (a: FileEntry, b: FileEntry): number => {
       let result: number;
@@ -83,12 +119,12 @@ export default function FileManager({ sessionId }: FileManagerProps) {
     files.sort(compare);
 
     return [...dirs, ...files];
-  }, [entries, searchQuery, sortBy, sortDir]);
+  }, [entries, searchResults, sortBy, sortDir]);
 
   const singleFolderSelected = useMemo(() => {
     if (selectedPaths.size !== 1) return false;
-    const name = [...selectedPaths][0];
-    const entry = processedEntries.find((e) => e.name === name);
+    const key = [...selectedPaths][0];
+    const entry = processedEntries.find((e) => (e.relativePath || e.name) === key);
     return entry?.type === "directory" || false;
   }, [selectedPaths, processedEntries]);
 
@@ -96,16 +132,35 @@ export default function FileManager({ sessionId }: FileManagerProps) {
   const someSelected = selectedPaths.size > 0 && !allSelected;
 
   const handleNavigate = useCallback(
-    (name: string) => {
-      if (name === ".") {
+    (nameOrPath: string) => {
+      // If in search mode, navigate to parent folder of the result
+      if (searchResults) {
+        const entry = searchResults.find((e) => (e.relativePath || e.name) === nameOrPath);
+        if (entry?.type === "directory" && entry.relativePath) {
+          setSearchQuery("");
+          setSearchResults(null);
+          setCurrentPath(entry.relativePath);
+          return;
+        }
+        if (entry?.relativePath) {
+          // Navigate to parent directory of the file
+          const parentDir = entry.relativePath.split("/").slice(0, -1).join("/");
+          setSearchQuery("");
+          setSearchResults(null);
+          setCurrentPath(parentDir || ".");
+          return;
+        }
+      }
+
+      if (nameOrPath === ".") {
         setCurrentPath(".");
       } else if (currentPath === ".") {
-        setCurrentPath(name);
+        setCurrentPath(nameOrPath);
       } else {
-        setCurrentPath(currentPath + "/" + name);
+        setCurrentPath(currentPath + "/" + nameOrPath);
       }
     },
-    [currentPath]
+    [currentPath, searchResults]
   );
 
   const handleBreadcrumbNavigate = useCallback((newPath: string) => {
@@ -113,18 +168,18 @@ export default function FileManager({ sessionId }: FileManagerProps) {
   }, []);
 
   const handleSelect = useCallback(
-    (name: string, e: React.MouseEvent) => {
+    (key: string, e: React.MouseEvent) => {
       setSelectedPaths((prev) => {
         const next = new Set(prev);
         if (e.ctrlKey || e.metaKey) {
-          if (next.has(name)) next.delete(name);
-          else next.add(name);
+          if (next.has(key)) next.delete(key);
+          else next.add(key);
         } else {
-          if (next.has(name) && next.size === 1) {
+          if (next.has(key) && next.size === 1) {
             next.clear();
           } else {
             next.clear();
-            next.add(name);
+            next.add(key);
           }
         }
         return next;
@@ -133,11 +188,11 @@ export default function FileManager({ sessionId }: FileManagerProps) {
     []
   );
 
-  const handleCheckboxChange = useCallback((name: string) => {
+  const handleCheckboxChange = useCallback((key: string) => {
     setSelectedPaths((prev) => {
       const next = new Set(prev);
-      if (next.has(name)) next.delete(name);
-      else next.add(name);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }, []);
@@ -146,7 +201,7 @@ export default function FileManager({ sessionId }: FileManagerProps) {
     if (selectedPaths.size === processedEntries.length && processedEntries.length > 0) {
       setSelectedPaths(new Set());
     } else {
-      setSelectedPaths(new Set(processedEntries.map((e) => e.name)));
+      setSelectedPaths(new Set(processedEntries.map((e) => e.relativePath || e.name)));
     }
   }, [processedEntries, selectedPaths.size]);
 
@@ -164,33 +219,38 @@ export default function FileManager({ sessionId }: FileManagerProps) {
 
   const handleEnterFolder = useCallback(() => {
     if (selectedPaths.size !== 1) return;
-    const name = [...selectedPaths][0];
-    handleNavigate(name);
+    const key = [...selectedPaths][0];
+    handleNavigate(key);
   }, [selectedPaths, handleNavigate]);
 
   const fullPath = (name: string) =>
     currentPath === "." ? name : currentPath + "/" + name;
 
   const handleDownload = useCallback(
-    (name: string) => {
-      const p = fullPath(name);
+    (nameOrPath: string) => {
+      // In search mode, relativePath is already relative to project root
+      const p = searchResults
+        ? nameOrPath
+        : fullPath(nameOrPath);
+      const fileName = nameOrPath.split("/").pop() || nameOrPath;
       const url = `/api/sessions/${sessionId}/files/download?path=${encodeURIComponent(p)}`;
       const a = document.createElement("a");
       a.href = url;
-      a.download = name;
+      a.download = fileName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
     },
-    [sessionId, currentPath]
+    [sessionId, currentPath, searchResults]
   );
 
   const handleDownloadSelected = useCallback(async () => {
-    const paths = [...selectedPaths].map((name) => fullPath(name));
+    const keys = [...selectedPaths];
+    const paths = keys.map((key) => searchResults ? key : fullPath(key));
     if (paths.length === 1) {
-      const entry = entries.find((e) => e.name === [...selectedPaths][0]);
+      const entry = processedEntries.find((e) => (e.relativePath || e.name) === keys[0]);
       if (entry && entry.type === "file") {
-        handleDownload([...selectedPaths][0]);
+        handleDownload(keys[0]);
         return;
       }
     }
@@ -214,7 +274,7 @@ export default function FileManager({ sessionId }: FileManagerProps) {
     } catch {
       // ignore
     }
-  }, [selectedPaths, sessionId, currentPath, entries, handleDownload]);
+  }, [selectedPaths, sessionId, currentPath, processedEntries, handleDownload, searchResults]);
 
   // Rename
   const handleRenameStart = useCallback((name: string) => {
@@ -276,7 +336,7 @@ export default function FileManager({ sessionId }: FileManagerProps) {
   }, [deleteConfirm, sessionId, currentPath, fetchEntries]);
 
   return (
-    <div className="flex flex-col h-full bg-[#0a0a0a] rounded-xl overflow-hidden">
+    <div className="flex flex-col w-full h-full bg-[#0a0a0a] rounded-xl overflow-hidden">
       {/* Toolbar */}
       <div className="border-b border-zinc-800/50 px-4 py-3 space-y-3">
         <Breadcrumbs currentPath={currentPath} onNavigate={handleBreadcrumbNavigate} />
@@ -292,7 +352,7 @@ export default function FileManager({ sessionId }: FileManagerProps) {
       </div>
 
       {/* File list */}
-      <div className="flex-1 overflow-y-auto px-2 py-2">
+      <div className="flex-1 overflow-y-auto">
         <FileList
           entries={processedEntries}
           selectedPaths={selectedPaths}
@@ -307,7 +367,7 @@ export default function FileManager({ sessionId }: FileManagerProps) {
           onRenameSubmit={handleRenameSubmit}
           onRenameCancel={handleRenameCancel}
           onDelete={handleDeleteSingle}
-          loading={loading}
+          loading={loading || searchLoading}
           sortBy={sortBy}
           sortDir={sortDir}
           onSortChange={handleSortChange}
@@ -316,6 +376,8 @@ export default function FileManager({ sessionId }: FileManagerProps) {
           onSelectAll={handleSelectAll}
           columnWidths={columnWidths}
           onColumnResize={setColumnWidths}
+          searchQuery={searchQuery}
+          isRootPath={currentPath === "."}
         />
       </div>
 

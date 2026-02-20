@@ -7,6 +7,7 @@ import { formatFileSize, relativeTime } from "@/lib/utils";
 
 export interface FileEntry {
   name: string;
+  relativePath?: string;
   type: "file" | "directory";
   size: number;
   modifiedAt: string;
@@ -85,17 +86,16 @@ export default function FileItem({
 
   return (
     <motion.div
-      layout
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
-      transition={{ duration: 0.15 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.1 }}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
-      className={`grid items-center px-3 py-2 rounded-lg transition-all duration-150 group cursor-pointer ${
+      className={`grid items-center px-4 py-2 transition-all duration-150 group cursor-pointer ${
         isSelected
-          ? "bg-gradient-to-r from-violet-500/10 to-indigo-500/10 border border-violet-500/20"
-          : "hover:bg-zinc-800/50 border border-transparent"
+          ? "bg-gradient-to-r from-violet-500/10 to-indigo-500/10"
+          : "hover:bg-zinc-800/50"
       }`}
       style={{ gridTemplateColumns }}
     >
@@ -135,7 +135,14 @@ export default function FileItem({
           />
         ) : (
           <span className="text-sm text-zinc-300 truncate block">
-            {entry.name}
+            {entry.relativePath && entry.relativePath !== entry.name ? (
+              <>
+                <span className="text-zinc-600">{entry.relativePath.slice(0, entry.relativePath.length - entry.name.length)}</span>
+                {entry.name}
+              </>
+            ) : (
+              entry.name
+            )}
           </span>
         )}
       </div>

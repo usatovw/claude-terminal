@@ -225,7 +225,7 @@ function SessionItem({
   return (
     <div
       onClick={onSelect}
-      className={`px-3 py-2.5 rounded-lg transition-all duration-150 group cursor-pointer ${
+      className={`px-3 py-3 md:py-2.5 rounded-lg transition-all duration-150 group cursor-pointer ${
         isSelected
           ? "bg-gradient-to-r from-violet-500/10 to-indigo-500/10 border border-violet-500/20"
           : "hover:bg-zinc-800/50 border border-transparent"
@@ -258,38 +258,38 @@ function SessionItem({
           )}
         </div>
 
-        {/* Action buttons */}
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+        {/* Action buttons — always visible on mobile, hover on desktop */}
+        <div className="flex items-center gap-1 md:gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex-shrink-0">
           {session.isActive ? (
             <button
               onClick={onStop}
-              className="p-1 text-zinc-500 hover:text-amber-400 transition-colors"
+              className="p-2 md:p-1 text-zinc-500 hover:text-amber-400 transition-colors"
               title="Остановить"
             >
-              <Pause className="w-3.5 h-3.5" />
+              <Pause className="w-4 h-4 md:w-3.5 md:h-3.5" />
             </button>
           ) : (
             <button
               onClick={onResume}
-              className="p-1 text-zinc-500 hover:text-emerald-400 transition-colors"
+              className="p-2 md:p-1 text-zinc-500 hover:text-emerald-400 transition-colors"
               title="Возобновить"
             >
-              <Play className="w-3.5 h-3.5" />
+              <Play className="w-4 h-4 md:w-3.5 md:h-3.5" />
             </button>
           )}
           <button
             onClick={onRenameStart}
-            className="p-1 text-zinc-500 hover:text-zinc-300 transition-colors"
+            className="p-2 md:p-1 text-zinc-500 hover:text-zinc-300 transition-colors"
             title="Переименовать"
           >
-            <Pencil className="w-3.5 h-3.5" />
+            <Pencil className="w-4 h-4 md:w-3.5 md:h-3.5" />
           </button>
           <button
             onClick={onDelete}
-            className="p-1 text-zinc-500 hover:text-red-400 transition-colors"
+            className="p-2 md:p-1 text-zinc-500 hover:text-red-400 transition-colors"
             title="Удалить"
           >
-            <Trash className="w-3.5 h-3.5" />
+            <Trash className="w-4 h-4 md:w-3.5 md:h-3.5" />
           </button>
         </div>
       </div>

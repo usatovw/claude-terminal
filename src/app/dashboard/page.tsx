@@ -2,11 +2,16 @@
 
 import { useState, useCallback, useEffect } from "react";
 import dynamic from "next/dynamic";
+import { motion, AnimatePresence } from "motion/react";
 import Navbar from "@/components/Navbar";
 import SessionList from "@/components/SessionList";
 import { Button as MovingBorderButton } from "@/components/ui/moving-border";
 import { TypewriterEffect } from "@/components/ui/typewriter-effect";
-import { ChevronLeft, ChevronRight, Maximize, Minimize } from "@/components/Icons";
+import { TextGenerateEffect } from "@/components/ui/text-generate-effect";
+import { FlipWords } from "@/components/ui/flip-words";
+import { Spotlight } from "@/components/ui/spotlight";
+import { HoverBorderGradient } from "@/components/ui/hover-border-gradient";
+import { ChevronLeft, ChevronRight, Maximize, Minimize, X } from "@/components/Icons";
 
 const Terminal = dynamic(() => import("@/components/Terminal"), {
   ssr: false,
@@ -21,6 +26,7 @@ export default function Dashboard() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [terminalKey, setTerminalKey] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<
     "connected" | "disconnected" | "idle"
@@ -76,6 +82,7 @@ export default function Dashboard() {
     setActiveSessionId(sessionId);
     setTerminalKey((k) => k + 1);
     setConnectionStatus("idle");
+    setMobileSidebarOpen(false);
   }, []);
 
   const handleSessionDeleted = useCallback(
@@ -96,6 +103,7 @@ export default function Dashboard() {
         setActiveSessionId(data.sessionId);
         setTerminalKey((k) => k + 1);
         setConnectionStatus("idle");
+        setMobileSidebarOpen(false);
       }
     } catch {
       // Ignore
@@ -111,10 +119,10 @@ export default function Dashboard() {
 
   return (
     <div className="flex h-screen bg-black">
-      {/* Sidebar */}
+      {/* Desktop sidebar */}
       {!fullscreen && (
         <div
-          className={`${
+          className={`hidden md:block ${
             sidebarOpen ? "w-72" : "w-0"
           } transition-all duration-200 border-r border-zinc-800/30 bg-zinc-950/90 overflow-hidden flex-shrink-0`}
         >
@@ -127,6 +135,47 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Mobile sidebar overlay */}
+      <AnimatePresence>
+        {mobileSidebarOpen && !fullscreen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 bg-black/60 z-30 md:hidden"
+              onClick={() => setMobileSidebarOpen(false)}
+            />
+            {/* Drawer */}
+            <motion.div
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="fixed top-0 left-0 bottom-0 w-72 z-40 bg-zinc-950 border-r border-zinc-800/30 md:hidden"
+            >
+              {/* Close button */}
+              <div className="absolute top-3 right-3 z-50">
+                <button
+                  onClick={() => setMobileSidebarOpen(false)}
+                  className="p-2 text-zinc-400 hover:text-zinc-200 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <SessionList
+                activeSessionId={activeSessionId}
+                onSelectSession={handleSelectSession}
+                onSessionDeleted={handleSessionDeleted}
+                onNewSession={handleNewSession}
+              />
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       {/* Main area */}
       <div className="flex-1 flex flex-col min-w-0">
         {!fullscreen && (
@@ -134,15 +183,17 @@ export default function Dashboard() {
             activeSessionId={activeSessionId}
             connectionStatus={connectionStatus}
             sessionCount={sessionCount}
+            onMenuClick={() => setMobileSidebarOpen(true)}
           />
         )}
 
-        {/* Sidebar toggle */}
+        {/* Desktop sidebar toggle */}
         {!fullscreen && (
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="absolute top-3 z-20 text-zinc-600 hover:text-zinc-400 transition-colors p-1"
+            className="hidden md:flex absolute top-3 z-20 items-center justify-center w-7 h-7 rounded-md text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800/80 transition-all"
             style={{ left: sidebarOpen ? "calc(18rem + 4px)" : "4px" }}
+            title={sidebarOpen ? "Скрыть панель" : "Показать панель"}
           >
             {sidebarOpen ? (
               <ChevronLeft className="w-4 h-4" />
@@ -155,17 +206,17 @@ export default function Dashboard() {
         {/* Terminal area */}
         <div className="flex-1 relative">
           {activeSessionId ? (
-            <div className={`absolute inset-0 ${fullscreen ? "m-0" : "m-2"}`}>
+            <div className={`absolute inset-0 ${fullscreen ? "m-0" : "m-1 md:m-2"}`}>
               {/* Fullscreen toggle */}
               <button
                 onClick={() => setFullscreen(!fullscreen)}
-                className="absolute top-2 right-2 z-10 p-1.5 text-zinc-600 hover:text-zinc-300 transition-colors bg-zinc-900/80 rounded-md backdrop-blur-sm"
+                className="absolute top-2 right-2 z-10 p-2 md:p-1.5 text-zinc-600 hover:text-zinc-300 transition-colors bg-zinc-900/80 rounded-md backdrop-blur-sm"
                 title={fullscreen ? "Выйти из полноэкранного" : "Полноэкранный режим"}
               >
                 {fullscreen ? (
-                  <Minimize className="w-4 h-4" />
+                  <Minimize className="w-5 h-5 md:w-4 md:h-4" />
                 ) : (
-                  <Maximize className="w-4 h-4" />
+                  <Maximize className="w-5 h-5 md:w-4 md:h-4" />
                 )}
               </button>
 
@@ -180,35 +231,54 @@ export default function Dashboard() {
                 <Terminal
                   key={terminalKey}
                   sessionId={activeSessionId}
+                  fullscreen={fullscreen}
                   onConnectionChange={handleConnectionChange}
                 />
               </MovingBorderButton>
             </div>
           ) : (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center max-w-md">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500/20 to-indigo-600/20 flex items-center justify-center text-violet-400 text-2xl mx-auto mb-6 border border-violet-500/10">
-                  C
-                </div>
+            <div className="flex items-center justify-center h-full relative overflow-hidden px-4">
+              {/* Spotlight background */}
+              <Spotlight
+                className="-top-40 left-0 md:left-60 md:-top-20"
+                fill="rgba(139, 92, 246, 0.15)"
+              />
+
+              <div className="text-center max-w-md relative z-10">
                 <div className="mb-4">
                   <TypewriterEffect
                     words={[
                       { text: "Claude", className: "text-white" },
                       { text: "Terminal", className: "text-violet-400" },
                     ]}
-                    className="text-2xl"
+                    className="text-xl md:text-2xl"
+                    cursorClassName="bg-violet-500"
                   />
                 </div>
-                <p className="text-zinc-500 mb-8 text-sm leading-relaxed">
-                  Создайте новую сессию или выберите существующую из списка
-                  слева
-                </p>
-                <button
+
+                <div className="mb-2 text-zinc-400 text-sm md:text-base">
+                  <FlipWords
+                    words={["Создавайте", "Исследуйте", "Автоматизируйте", "Стройте"]}
+                    className="text-violet-400"
+                  />
+                  <span> с помощью AI</span>
+                </div>
+
+                <div className="mb-8">
+                  <TextGenerateEffect
+                    words="Создайте новую сессию или выберите существующую из списка слева"
+                    className="text-zinc-500 text-sm leading-relaxed"
+                  />
+                </div>
+
+                <HoverBorderGradient
+                  as="button"
+                  containerClassName="mx-auto"
+                  className="flex items-center justify-center gap-2 bg-zinc-950 text-white px-6 py-3 text-sm font-medium"
                   onClick={handleNewSession}
-                  className="px-6 py-3 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white rounded-xl text-sm font-medium transition-all duration-200 hover:shadow-lg hover:shadow-violet-500/20"
                 >
                   Начать общение
-                </button>
+                </HoverBorderGradient>
               </div>
             </div>
           )}

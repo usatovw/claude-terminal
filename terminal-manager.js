@@ -1,13 +1,21 @@
 const pty = require("node-pty");
 const fs = require("fs");
 const path = require("path");
+const { execSync } = require("child_process");
 
 const PTY_ENV = {
   ...process.env,
   TERM: "xterm-256color",
   COLORTERM: "truecolor",
   CLAUDECODE: "",
+  DISPLAY: ":99",
 };
+
+// Remove SSH env vars so Claude CLI doesn't think it's in SSH
+delete PTY_ENV.SSH_CLIENT;
+delete PTY_ENV.SSH_CONNECTION;
+delete PTY_ENV.SSH_TTY;
+delete PTY_ENV.SSH_AUTH_SOCK;
 
 const DATA_DIR = path.join(process.env.HOME || "/root", "projects", "Claude");
 const SESSIONS_FILE = path.join(DATA_DIR, ".sessions.json");
@@ -183,6 +191,26 @@ class TerminalManager {
               session.pty.resize(message.cols, message.rows);
             }
             break;
+          case "image": {
+            // Browser clipboard bridge: receive base64 image and put it into X11 clipboard
+            const imgData = Buffer.from(message.data, "base64");
+            const imgPath = `/tmp/clipboard-image-${Date.now()}.png`;
+            try {
+              fs.writeFileSync(imgPath, imgData);
+              execSync(`xclip -selection clipboard -t image/png < "${imgPath}"`, {
+                env: { ...process.env, DISPLAY: ":99" },
+                timeout: 5000,
+              });
+              ws.send(JSON.stringify({ type: "output", data: "\r\n\x1b[32m✓ Изображение загружено в clipboard\x1b[0m\r\n" }));
+              // Cleanup after a delay
+              setTimeout(() => {
+                try { fs.unlinkSync(imgPath); } catch {}
+              }, 10000);
+            } catch (err) {
+              ws.send(JSON.stringify({ type: "output", data: `\r\n\x1b[31m✗ Ошибка clipboard: ${err.message}\x1b[0m\r\n` }));
+            }
+            break;
+          }
         }
       } catch {
         // Ignore malformed messages

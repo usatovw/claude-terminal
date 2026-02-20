@@ -8,15 +8,40 @@ import "@xterm/xterm/css/xterm.css";
 
 interface TerminalProps {
   sessionId: string;
+  fullscreen?: boolean;
   onConnectionChange?: (status: "connected" | "disconnected") => void;
 }
 
-export default function Terminal({ sessionId, onConnectionChange }: TerminalProps) {
+export default function Terminal({ sessionId, fullscreen, onConnectionChange }: TerminalProps) {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const initRef = useRef(false);
+
+  // Refit xterm when fullscreen changes
+  useEffect(() => {
+    if (!fitAddonRef.current || !wsRef.current) return;
+    const fitAddon = fitAddonRef.current;
+    const ws = wsRef.current;
+    const term = xtermRef.current;
+
+    // Double rAF to guarantee layout + paint completed
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        fitAddon.fit();
+        if (term && ws.readyState === WebSocket.OPEN) {
+          ws.send(
+            JSON.stringify({
+              type: "resize",
+              cols: term.cols,
+              rows: term.rows,
+            })
+          );
+        }
+      });
+    });
+  }, [fullscreen]);
 
   const connectTerminal = useCallback(async () => {
     if (!terminalRef.current || !sessionId) return;
@@ -116,6 +141,29 @@ export default function Terminal({ sessionId, onConnectionChange }: TerminalProp
       }
     });
 
+    // Clipboard image paste handler
+    const handlePaste = (e: ClipboardEvent) => {
+      if (!e.clipboardData) return;
+      const items = e.clipboardData.items;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith("image/")) {
+          e.preventDefault();
+          const blob = items[i].getAsFile();
+          if (!blob) return;
+          const reader = new FileReader();
+          reader.onload = () => {
+            const base64 = (reader.result as string).split(",")[1];
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: "image", data: base64 }));
+            }
+          };
+          reader.readAsDataURL(blob);
+          return;
+        }
+      }
+    };
+    terminalRef.current.addEventListener("paste", handlePaste);
+
     const handleResize = () => {
       fitAddon.fit();
       if (ws.readyState === WebSocket.OPEN) {
@@ -134,7 +182,9 @@ export default function Terminal({ sessionId, onConnectionChange }: TerminalProp
       resizeObserver.observe(terminalRef.current);
     }
 
+    const containerEl = terminalRef.current;
     return () => {
+      containerEl?.removeEventListener("paste", handlePaste);
       resizeObserver.disconnect();
       ws.close();
       term.dispose();
@@ -159,7 +209,7 @@ export default function Terminal({ sessionId, onConnectionChange }: TerminalProp
   return (
     <div
       ref={terminalRef}
-      className="w-full h-full min-h-[400px]"
+      className="w-full h-full min-h-0"
       style={{ padding: "4px" }}
     />
   );

@@ -37,7 +37,11 @@ class PresenceManager {
   handleCursor(peerId, x, y) {
     const peer = this.peers.get(peerId);
     if (!peer || !peer.sessionId) return;
-    const msg = JSON.stringify({ type: "cursor", peerId, x, y });
+    // Include name + colorIndex so receiver can create peer entry if missing
+    const msg = JSON.stringify({
+      type: "cursor", peerId, x, y,
+      name: peer.name, colorIndex: peer.colorIndex,
+    });
     for (const [id, p] of this.peers) {
       if (id !== peerId && p.sessionId === peer.sessionId && p.ws.readyState === 1) {
         p.ws.send(msg);
@@ -48,7 +52,11 @@ class PresenceManager {
   handleChat(peerId, text) {
     const peer = this.peers.get(peerId);
     if (!peer || !peer.sessionId) return;
-    const msg = JSON.stringify({ type: "chat", peerId, text });
+    // Include name + colorIndex so receiver can render even without prior peers broadcast
+    const msg = JSON.stringify({
+      type: "chat", peerId, text,
+      name: peer.name, colorIndex: peer.colorIndex,
+    });
     for (const [id, p] of this.peers) {
       if (id !== peerId && p.sessionId === peer.sessionId && p.ws.readyState === 1) {
         p.ws.send(msg);

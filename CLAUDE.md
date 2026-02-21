@@ -23,7 +23,7 @@ Browser (chat UI) ←→ REST API ←→ server.js ←→ ChatManager ←→ SQL
 
 **db.js** — SQLite database (better-sqlite3, WAL mode). Tables: `users`, `messages`, `attachments`. Auto-creates `data/` directory. Seeds admin from env vars on first run.
 
-**terminal-manager.js** — Manages PTY sessions. Spawns `claude` CLI via node-pty, tracks connected WebSocket clients, handles session lifecycle (create/stop/resume/delete/rename). Persists session metadata to `~/.sessions.json`.
+**terminal-manager.js** — Manages PTY sessions. Spawns `claude` CLI via node-pty, tracks connected WebSocket clients, handles session lifecycle (create/stop/resume/delete/rename). Persists session metadata to `~/.sessions.json`. Replay buffer: 500KB circular — new clients receive full history on connect.
 
 **chat-manager.js** — Persistent global chat. Stores messages + file attachments in SQLite, broadcasts new messages to all connected presence WebSocket peers via `chat_message` event.
 
@@ -71,9 +71,11 @@ Browser (chat UI) ←→ REST API ←→ server.js ←→ ChatManager ←→ SQL
 | `src/components/chat/MediaGallery.tsx` | Фото grid + Файлы list with infinite scroll |
 | `src/components/chat/ImageLightbox.tsx` | Fullscreen image preview |
 | `src/components/ui/lamp.tsx` | Aceternity Lamp effect for 404 |
+| `src/lib/TerminalScrollContext.tsx` | React context: terminal scroll state (viewportY, rows, totalLines) |
 | `src/components/presence/PresenceProvider.tsx` | WS client, presence + global chat context |
-| `src/components/presence/CursorOverlay.tsx` | Overlay, mouse tracking, ephemeral chat |
+| `src/components/presence/CursorOverlay.tsx` | Overlay, mouse tracking, absolute positioning, edge indicators |
 | `src/components/presence/Cursor.tsx` | Cursor SVG + chat bubble + name tag |
+| `src/components/presence/EdgeIndicator.tsx` | Off-screen cursor pill (name + arrow, click-to-scroll) |
 | `src/components/presence/PresenceAvatars.tsx` | Session peer avatars |
 | `src/components/ui/` | Aceternity UI components |
 | `ecosystem.config.js` | PM2 production config |
@@ -127,13 +129,19 @@ Solution:
 
 ## Presence system
 
-Figma-like multi-user presence. Separate WebSocket endpoint `/api/presence`.
+Figma/Miro-like multi-user presence with absolute content positioning. Separate WebSocket endpoint `/api/presence`.
 
-**Server** (`presence-manager.js`): tracks peers per session, broadcasts cursor positions, chat messages, and peer lists. Round-robin 12-color assignment. Name comes from JWT token (real name for registered users, random for guests).
+**Server** (`presence-manager.js`): tracks peers per session, broadcasts cursor positions (with `yBot` — bottom-relative line offset), chat messages, and peer lists. Round-robin 12-color assignment. Name comes from JWT token (real name for registered users, random for guests).
 
-**Client** (`PresenceProvider`): connects via WebSocket with short-lived token. Waits for UserContext to load before connecting (so name is correct). Exposes context: peers, chatMessages, globalChatMessages, sendCursor, sendChat, sendChatClose, joinSession.
+**Client** (`PresenceProvider`): connects via WebSocket with short-lived token. Waits for UserContext to load before connecting (so name is correct). Exposes context: peers, chatMessages, globalChatMessages, sendCursor, sendChat, sendChatClose, joinSession. Cursor data format: `{ x, yBot, viewportHeight, timestamp }`.
 
-**Cursor component**: single unified component with flex auto-layout (SVG cursor → chat bubble → name tag). Chat bubble appears on "/" key press with blur animation. Text broadcasts live on each keystroke. Auto-close after 5s inactivity. Name tag hidden for local user.
+**TerminalScrollContext** (`src/lib/TerminalScrollContext.tsx`): React context bridging Terminal ↔ CursorOverlay. Terminal publishes `{ viewportY, rows, totalLines }` via xterm API (`term.buffer.active.viewportY`, `term.rows`, `term.buffer.active.length`). Listens to `term.onScroll` (direct) and `term.onWriteParsed` (deferred via RAF to avoid reading before auto-scroll). CursorOverlay reads this state to compute absolute cursor positions.
+
+**Absolute cursor positioning**: cursors track content position, not viewport percentage. Coordinate: `yBot = totalLines - (viewportY + yFraction)` — distance from bottom of buffer in lines. Bottom-relative so it stays synced across clients with different buffer sizes (different connect times). On receive: `cursorLine = localTotalLines - yBot`, then `displayYPct = (cursorLine - localViewportY) / localRows * 100`.
+
+**EdgeIndicator** (`src/components/presence/EdgeIndicator.tsx`): when a remote cursor is off-screen (displayYPct < -5 or > 105), a colored pill appears at top/bottom edge with user name + arrow (↑/↓). Click scrolls terminal to that cursor's position via `term.scrollToLine()`. Multiple off-screen cursors stack with gap.
+
+**Cursor component**: single unified component with flex auto-layout (SVG cursor → chat bubble → name tag). Chat bubble appears on "/" key press with blur animation. Text broadcasts live on each keystroke. Auto-close after 5s inactivity. Name tag: solid presence color background with white text (visible on both dark and light themes). Name tag hidden for local user.
 
 ## Conventions
 

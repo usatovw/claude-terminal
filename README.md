@@ -11,7 +11,7 @@ Self-hosted web interface for [Claude Code CLI](https://docs.anthropic.com/en/do
 - **Global chat** — persistent messages with markdown, file/image attachments, media gallery, real-time delivery via WebSocket
 - **Multi-session** — create, stop, resume, rename, delete sessions with loading states
 - **File manager** — browse, download, rename, delete files in session directories; recursive search; bulk zip-download
-- **Presence** — Figma-like cursors, live chat bubbles, session avatars via WebSocket
+- **Presence** — Figma/Miro-like cursors with absolute content positioning, edge indicators for off-screen cursors (click to scroll), live chat bubbles, session avatars via WebSocket
 - **Image paste** — Ctrl+V images from clipboard directly into Claude CLI (via X11 bridge)
 - **Mobile-first** — adaptive layout throughout: sidebar drawer, touch-friendly targets, chat overlay
 - **404 page** — Aceternity Lamp effect, because even errors should look good
@@ -222,7 +222,7 @@ Browser (presence) ←WebSocket→ server.js ←────────→ Pres
 │   │   ├── Navbar.tsx           # Top bar with chat toggle
 │   │   ├── chat/               # ChatPanel, ChatMessage, ChatInput, DateSeparator,
 │   │   │                       # MediaGallery, ImageLightbox
-│   │   ├── presence/           # PresenceProvider, CursorOverlay, Cursor, Avatars
+│   │   ├── presence/           # PresenceProvider, CursorOverlay, Cursor, EdgeIndicator, Avatars
 │   │   ├── file-manager/       # FileItem, FileList, FileTableHeader, etc.
 │   │   └── ui/                 # Aceternity UI components
 │   └── lib/
@@ -231,6 +231,7 @@ Browser (presence) ←WebSocket→ server.js ←────────→ Pres
 │       ├── email.ts            # Nodemailer for registration emails
 │       ├── UserContext.tsx      # React context for user identity
 │       ├── markdown.ts         # Lightweight MD→HTML renderer
+│       ├── TerminalScrollContext.tsx # Terminal scroll state for absolute cursor positioning
 │       ├── presence-colors.ts  # 12-color palette
 │       └── presence-names.ts   # Random Russian name generator
 ```

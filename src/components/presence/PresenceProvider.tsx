@@ -110,18 +110,32 @@ export default function PresenceProvider({ children }: { children: React.ReactNo
               });
               break;
 
-            case "chat":
+            case "chat": {
+              const ts = Date.now();
               setChatMessages((prev) => {
                 const next = new Map(prev);
                 next.set(msg.peerId, {
                   peerId: msg.peerId,
                   text: msg.text,
                   colorIndex: msg.colorIndex,
-                  timestamp: Date.now(),
+                  timestamp: ts,
                 });
                 return next;
               });
+              // Auto-remove after 5s so AnimatePresence handles exit animation
+              setTimeout(() => {
+                setChatMessages((prev) => {
+                  const current = prev.get(msg.peerId);
+                  if (current && current.timestamp === ts) {
+                    const next = new Map(prev);
+                    next.delete(msg.peerId);
+                    return next;
+                  }
+                  return prev;
+                });
+              }, 5000);
               break;
+            }
 
             case "chat_close":
               setChatMessages((prev) => {

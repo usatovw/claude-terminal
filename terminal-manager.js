@@ -71,8 +71,8 @@ class TerminalManager {
 
     ptyProcess.onData((data) => {
       session.buffer += data;
-      if (session.buffer.length > 50000) {
-        session.buffer = session.buffer.slice(-50000);
+      if (session.buffer.length > 500000) {
+        session.buffer = session.buffer.slice(-500000);
       }
       for (const client of session.connectedClients) {
         if (client.readyState === 1) {

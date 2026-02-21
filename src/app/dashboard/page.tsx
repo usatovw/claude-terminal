@@ -337,16 +337,18 @@ function DashboardInner() {
                     )}
                   </button>
 
-                  <div
-                    className="w-full h-full rounded-xl border border-accent/20 overflow-hidden"
-                    style={{ backgroundColor: themeConfigs[theme].terminal.background }}
-                  >
-                    <Terminal
-                      key={terminalKey}
-                      sessionId={activeSessionId}
-                      fullscreen={fullscreen}
-                      onConnectionChange={handleConnectionChange}
-                    />
+                  <div className="w-full h-full rounded-xl border border-border bg-surface-alt overflow-hidden p-1">
+                    <div
+                      className="w-full h-full rounded-lg overflow-hidden"
+                      style={{ backgroundColor: themeConfigs[theme].terminal.background }}
+                    >
+                      <Terminal
+                        key={terminalKey}
+                        sessionId={activeSessionId}
+                        fullscreen={fullscreen}
+                        onConnectionChange={handleConnectionChange}
+                      />
+                    </div>
                   </div>
                 </div>
               </TerminalScrollProvider>

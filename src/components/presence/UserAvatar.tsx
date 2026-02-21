@@ -15,7 +15,7 @@ export default function UserAvatar({ name, colorIndex, size = "sm" }: UserAvatar
 
   return (
     <div
-      className={`rounded-full flex items-center justify-center text-white font-medium border-2 border-zinc-950 ${color.bg}`}
+      className={`rounded-full flex items-center justify-center text-white font-medium border-2 border-background ${color.bg}`}
       style={{ width: px, height: px, fontSize: fs }}
       title={name}
     >

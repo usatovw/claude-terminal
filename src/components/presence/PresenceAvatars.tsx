@@ -30,7 +30,7 @@ export default function PresenceAvatars({ sessionId, maxVisible = 3 }: PresenceA
         />
       ))}
       {overflow > 0 && (
-        <div className="w-5 h-5 rounded-full bg-zinc-800 border-2 border-zinc-950 flex items-center justify-center text-[9px] text-zinc-400">
+        <div className="w-5 h-5 rounded-full bg-surface-alt border-2 border-background flex items-center justify-center text-[9px] text-muted-fg">
           +{overflow}
         </div>
       )}

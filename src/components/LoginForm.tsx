@@ -117,12 +117,12 @@ export default function LoginForm() {
   };
 
   const inputClass =
-    "w-full px-4 py-3 bg-zinc-900/80 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 transition-colors";
+    "w-full px-4 py-3 bg-surface-alt/80 border border-border rounded-xl text-foreground placeholder-muted-fg focus:outline-none focus:border-muted-fg transition-colors";
 
   return (
     <div className="flex flex-col gap-5 w-full max-w-sm">
       {/* Mode tabs */}
-      <div className="flex items-center gap-1 bg-zinc-900/50 rounded-xl p-1 border border-zinc-800/50">
+      <div className="flex items-center gap-1 bg-surface-alt/50 rounded-xl p-1 border border-border">
         {([
           { key: "login", label: "Вход" },
           { key: "register", label: "Регистрация" },
@@ -133,8 +133,8 @@ export default function LoginForm() {
             onClick={() => switchMode(key)}
             className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
               mode === key
-                ? "bg-zinc-800 text-white"
-                : "text-zinc-500 hover:text-zinc-300"
+                ? "bg-surface-hover text-foreground"
+                : "text-muted-fg hover:text-foreground"
             }`}
           >
             {label}
@@ -164,12 +164,12 @@ export default function LoginForm() {
             autoComplete="current-password"
           />
 
-          {error && <p className="text-red-400 text-sm text-center">{error}</p>}
+          {error && <p className="text-danger text-sm text-center">{error}</p>}
 
           <HoverBorderGradient
             as="button"
             containerClassName="w-full"
-            className="w-full flex items-center justify-center gap-2 bg-zinc-900 text-white px-6 py-3"
+            className="w-full flex items-center justify-center gap-2 bg-surface-alt text-foreground px-6 py-3"
           >
             {loading ? (
               <span className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full" />
@@ -220,13 +220,13 @@ export default function LoginForm() {
             autoComplete="new-password"
           />
 
-          {error && <p className="text-red-400 text-sm text-center">{error}</p>}
-          {success && <p className="text-amber-400 text-sm text-center">{success}</p>}
+          {error && <p className="text-danger text-sm text-center">{error}</p>}
+          {success && <p className="text-warning text-sm text-center">{success}</p>}
 
           <HoverBorderGradient
             as="button"
             containerClassName="w-full"
-            className="w-full flex items-center justify-center gap-2 bg-zinc-900 text-white px-6 py-3"
+            className="w-full flex items-center justify-center gap-2 bg-surface-alt text-foreground px-6 py-3"
           >
             {loading ? (
               <span className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full" />
@@ -250,12 +250,12 @@ export default function LoginForm() {
             autoComplete="off"
           />
 
-          {error && <p className="text-red-400 text-sm text-center">{error}</p>}
+          {error && <p className="text-danger text-sm text-center">{error}</p>}
 
           <HoverBorderGradient
             as="button"
             containerClassName="w-full"
-            className="w-full flex items-center justify-center gap-2 bg-zinc-900 text-white px-6 py-3"
+            className="w-full flex items-center justify-center gap-2 bg-surface-alt text-foreground px-6 py-3"
           >
             {loading ? (
               <span className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full" />

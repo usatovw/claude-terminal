@@ -9,6 +9,7 @@ import {
 } from "motion/react";
 import { useRef } from "react";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/lib/ThemeContext";
 
 export function Button({
   borderRadius = "1.75rem",
@@ -29,6 +30,36 @@ export function Button({
   className?: string;
   [key: string]: any;
 }) {
+  const { theme } = useTheme();
+
+  // Retro theme: simple bordered container without SVG animated border
+  if (theme === "retro") {
+    return (
+      <Component
+        className={cn(
+          "relative h-16 w-40 overflow-hidden bg-transparent text-xl",
+          containerClassName,
+        )}
+        style={{
+          borderRadius: borderRadius,
+        }}
+        {...otherProps}
+      >
+        <div
+          className={cn(
+            "relative flex h-full w-full items-center justify-center border-2 border-border-strong bg-surface text-sm text-foreground antialiased shadow-[var(--th-shadow)]",
+            className,
+          )}
+          style={{
+            borderRadius: `calc(${borderRadius} * 0.96)`,
+          }}
+        >
+          {children}
+        </div>
+      </Component>
+    );
+  }
+
   return (
     <Component
       className={cn(

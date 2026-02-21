@@ -16,8 +16,8 @@ export default function Breadcrumbs({ currentPath, onNavigate }: BreadcrumbsProp
         onClick={() => onNavigate(".")}
         className={`px-1.5 py-0.5 rounded transition-colors flex-shrink-0 cursor-pointer ${
           segments.length === 0
-            ? "text-zinc-200"
-            : "text-violet-400 hover:text-violet-300"
+            ? "text-foreground"
+            : "text-accent-fg hover:text-accent-fg/80"
         }`}
       >
         ~
@@ -28,13 +28,13 @@ export default function Breadcrumbs({ currentPath, onNavigate }: BreadcrumbsProp
 
         return (
           <div key={segPath} className="flex items-center gap-1 flex-shrink-0">
-            <ChevronRight className="w-3 h-3 text-zinc-600" />
+            <ChevronRight className="w-3 h-3 text-muted" />
             {isLast ? (
-              <span className="px-1.5 py-0.5 text-zinc-200">{seg}</span>
+              <span className="px-1.5 py-0.5 text-foreground">{seg}</span>
             ) : (
               <button
                 onClick={() => onNavigate(segPath)}
-                className="px-1.5 py-0.5 rounded text-violet-400 hover:text-violet-300 transition-colors cursor-pointer"
+                className="px-1.5 py-0.5 rounded text-accent-fg hover:text-accent-fg/80 transition-colors cursor-pointer"
               >
                 {seg}
               </button>

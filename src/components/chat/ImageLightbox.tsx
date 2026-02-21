@@ -22,7 +22,7 @@ export default function ImageLightbox({ src, onClose }: ImageLightboxProps) {
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm cursor-pointer"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-background/90 backdrop-blur-sm cursor-pointer"
       onClick={onClose}
     >
       <img

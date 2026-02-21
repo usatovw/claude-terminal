@@ -40,11 +40,11 @@ export default function DateSeparator({ date }: DateSeparatorProps) {
 
   return (
     <div className="flex items-center gap-3 my-3">
-      <div className="flex-1 h-px bg-zinc-800/50" />
-      <span className="text-[10px] text-zinc-600 uppercase tracking-wider font-medium">
+      <div className="flex-1 h-px bg-border" />
+      <span className="text-[10px] text-muted uppercase tracking-wider font-medium">
         {label}
       </span>
-      <div className="flex-1 h-px bg-zinc-800/50" />
+      <div className="flex-1 h-px bg-border" />
     </div>
   );
 }

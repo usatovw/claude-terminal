@@ -52,7 +52,7 @@ export default function ChatMessage({ message, onImageClick }: ChatMessageProps)
   );
 
   return (
-    <div className="flex gap-2.5 px-3 py-1.5 group hover:bg-zinc-900/30 transition-colors">
+    <div className="flex gap-2.5 px-3 py-1.5 group hover:bg-surface-hover/30 transition-colors">
       {/* Avatar */}
       <div
         className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-medium ${color.bg}`}
@@ -67,7 +67,7 @@ export default function ChatMessage({ message, onImageClick }: ChatMessageProps)
           <span className="text-sm font-medium" style={{ color: color.cursor }}>
             {fullName}
           </span>
-          <span className="text-[10px] text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity">
+          <span className="text-[10px] text-muted opacity-0 group-hover:opacity-100 transition-opacity">
             {time}
           </span>
         </div>
@@ -75,7 +75,7 @@ export default function ChatMessage({ message, onImageClick }: ChatMessageProps)
         {/* Text */}
         {text && (
           <div
-            className="text-sm text-zinc-300 leading-relaxed mt-0.5 break-words"
+            className="text-sm text-foreground leading-relaxed mt-0.5 break-words"
             dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }}
           />
         )}
@@ -89,7 +89,7 @@ export default function ChatMessage({ message, onImageClick }: ChatMessageProps)
                 onClick={() =>
                   onImageClick?.(`/api/chat/uploads/${att.filePath}`)
                 }
-                className="block rounded-lg overflow-hidden border border-zinc-800/50 hover:border-zinc-700 transition-colors cursor-pointer"
+                className="block rounded-lg overflow-hidden border border-border hover:border-border-strong transition-colors cursor-pointer"
               >
                 <img
                   src={`/api/chat/uploads/${att.filePath}`}
@@ -110,18 +110,18 @@ export default function ChatMessage({ message, onImageClick }: ChatMessageProps)
                 key={att.id}
                 href={`/api/chat/uploads/${att.filePath}`}
                 download={att.originalName}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-900/50 border border-zinc-800/50 hover:border-zinc-700 transition-colors group/file max-w-[280px]"
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-alt/50 border border-border hover:border-border-strong transition-colors group/file max-w-[280px]"
               >
-                <FileIcon className="w-4 h-4 text-zinc-500 flex-shrink-0" />
+                <FileIcon className="w-4 h-4 text-muted-fg flex-shrink-0" />
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs text-zinc-300 truncate">
+                  <div className="text-xs text-foreground truncate">
                     {att.originalName}
                   </div>
-                  <div className="text-[10px] text-zinc-600">
+                  <div className="text-[10px] text-muted">
                     {formatFileSize(att.size)}
                   </div>
                 </div>
-                <Download className="w-3.5 h-3.5 text-zinc-600 group-hover/file:text-zinc-400 transition-colors flex-shrink-0" />
+                <Download className="w-3.5 h-3.5 text-muted group-hover/file:text-muted-fg transition-colors flex-shrink-0" />
               </a>
             ))}
           </div>

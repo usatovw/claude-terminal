@@ -15,6 +15,8 @@ const MIME_MAP: Record<string, string> = {
   ".doc": "application/msword",
   ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   ".txt": "text/plain",
+  ".html": "text/html",
+  ".htm": "text/html",
   ".zip": "application/zip",
 };
 

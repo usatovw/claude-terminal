@@ -196,12 +196,12 @@ function ChatPanelMessages({
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="h-12 flex items-center justify-between px-4 border-b border-zinc-800/50 flex-shrink-0">
-        <span className="text-sm font-medium text-zinc-300">Чат</span>
+      <div className="h-12 flex items-center justify-between px-4 border-b border-border flex-shrink-0">
+        <span className="text-sm font-medium text-foreground">Чат</span>
         {onToggleGallery && (
           <button
             onClick={onToggleGallery}
-            className="p-1.5 text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
+            className="p-1.5 text-muted-fg hover:text-foreground transition-colors cursor-pointer"
             title="Медиа"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -221,17 +221,17 @@ function ChatPanelMessages({
       >
         {loading ? (
           <div className="flex items-center justify-center h-full">
-            <div className="animate-spin h-6 w-6 border-2 border-violet-500 border-t-transparent rounded-full" />
+            <div className="animate-spin h-6 w-6 border-2 border-accent border-t-transparent rounded-full" />
           </div>
         ) : messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <p className="text-zinc-600 text-sm">Нет сообщений</p>
+            <p className="text-muted text-sm">Нет сообщений</p>
           </div>
         ) : (
           <div className="py-2">
             {loadingOlder && (
               <div className="flex justify-center py-2">
-                <div className="animate-spin h-4 w-4 border-2 border-zinc-600 border-t-zinc-400 rounded-full" />
+                <div className="animate-spin h-4 w-4 border-2 border-muted border-t-muted-fg rounded-full" />
               </div>
             )}
             {messages.map((msg, i) => {

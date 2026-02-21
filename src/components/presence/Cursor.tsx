@@ -3,6 +3,8 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { PRESENCE_COLORS } from "@/lib/presence-colors";
+import { useTheme } from "@/lib/ThemeContext";
+import { themeConfigs } from "@/lib/theme-config";
 
 // Shared bubble constraints
 const BUBBLE_MAX_W = 300;
@@ -35,6 +37,8 @@ export default function Cursor({
   const measureRef = useRef<HTMLDivElement>(null);
   const color = PRESENCE_COLORS[colorIndex % PRESENCE_COLORS.length];
   const [fadeOpacity, setFadeOpacity] = useState(1);
+  const { theme } = useTheme();
+  const cursorTheme = themeConfigs[theme].cursor;
 
   // Remote cursor: auto-fade after 5s of no movement
   useEffect(() => {
@@ -81,8 +85,8 @@ export default function Cursor({
             <div
               className="rounded-lg p-1 border backdrop-blur-xl"
               style={{
-                backgroundColor: "rgba(9, 9, 11, 0.85)",
-                borderColor: color.cursor + "50",
+                backgroundColor: cursorTheme.bubbleBg,
+                borderColor: color.cursor + cursorTheme.bubbleBorder,
                 boxShadow: `0 0 15px ${color.cursor}20, 0 8px 16px rgba(0,0,0,0.4)`,
               }}
             >
@@ -94,7 +98,8 @@ export default function Cursor({
                 onChange={(e) => onChatChange?.(e.target.value.slice(0, 128))}
                 onKeyDown={handleKeyDown}
                 onBlur={onChatClose}
-                className="bg-transparent text-sm text-zinc-200 outline-none w-full px-3 py-2"
+                className="bg-transparent text-sm outline-none w-full px-3 py-2"
+                style={{ color: cursorTheme.textColor }}
               />
             </div>
           </motion.div>
@@ -205,8 +210,8 @@ export default function Cursor({
               <div
                 className="rounded-lg border backdrop-blur-xl"
                 style={{
-                  backgroundColor: "rgba(9, 9, 11, 0.85)",
-                  borderColor: color.cursor + "50",
+                  backgroundColor: cursorTheme.bubbleBg,
+                  borderColor: color.cursor + cursorTheme.bubbleBorder,
                   boxShadow: `0 0 12px ${color.cursor}20, 0 4px 8px rgba(0,0,0,0.3)`,
                 }}
               >
@@ -232,7 +237,7 @@ export default function Cursor({
                       }}
                       onKeyDown={handleKeyDown}
                       onBlur={onChatClose}
-                      className="bg-transparent text-xs text-zinc-200 outline-none pointer-events-auto resize-none"
+                      className="bg-transparent text-xs outline-none pointer-events-auto resize-none"
                       style={{
                         gridArea: "1/1",
                         width: "100%",
@@ -241,6 +246,7 @@ export default function Cursor({
                         minHeight: 0,
                         overflow: "hidden",
                         wordBreak: "break-word",
+                        color: cursorTheme.textColor,
                       }}
                     />
                   </div>

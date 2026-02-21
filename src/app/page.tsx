@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { AuroraBackground } from "@/components/ui/aurora-background";
 import { HoverBorderGradient } from "@/components/ui/hover-border-gradient";
@@ -9,6 +9,18 @@ import LoginForm from "@/components/LoginForm";
 export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const router = useRouter();
+  const savedThemeRef = useRef<string | null>(null);
+
+  // Force dark theme on login page — restore on unmount
+  useEffect(() => {
+    savedThemeRef.current = document.documentElement.getAttribute("data-theme");
+    document.documentElement.removeAttribute("data-theme");
+    return () => {
+      if (savedThemeRef.current) {
+        document.documentElement.setAttribute("data-theme", savedThemeRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     fetch("/api/auth/check")
@@ -29,7 +41,7 @@ export default function Home() {
           <h1 className="text-5xl md:text-6xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white via-zinc-300 to-zinc-500">
             Claude Terminal
           </h1>
-          <p className="mt-4 text-zinc-400 text-lg max-w-md mx-auto">
+          <p className="mt-4 text-muted-fg text-lg max-w-md mx-auto">
             Веб-интерфейс для Claude CLI. Полный доступ к терминалу из браузера.
           </p>
         </div>
@@ -41,7 +53,7 @@ export default function Home() {
           <HoverBorderGradient
             as="button"
             containerClassName=""
-            className="flex items-center gap-2 bg-zinc-900 text-white px-8 py-4 text-lg"
+            className="flex items-center gap-2 bg-surface-alt text-foreground px-8 py-4 text-lg"
             onClick={() => router.push("/dashboard")}
           >
             Начать общение →

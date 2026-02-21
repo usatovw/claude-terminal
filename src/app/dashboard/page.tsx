@@ -8,7 +8,6 @@ import Navbar, { ViewMode } from "@/components/Navbar";
 import SessionList from "@/components/SessionList";
 import FileManager from "@/components/FileManager";
 import StoppedSessionOverlay from "@/components/StoppedSessionOverlay";
-import { Button as MovingBorderButton } from "@/components/ui/moving-border";
 import { TypewriterEffect } from "@/components/ui/typewriter-effect";
 import { TextGenerateEffect } from "@/components/ui/text-generate-effect";
 import { FlipWords } from "@/components/ui/flip-words";
@@ -18,6 +17,9 @@ import { Maximize, Minimize, X } from "@/components/Icons";
 import PresenceProvider, { usePresence } from "@/components/presence/PresenceProvider";
 import CursorOverlay from "@/components/presence/CursorOverlay";
 import { UserProvider } from "@/lib/UserContext";
+import { ThemeProvider } from "@/lib/ThemeContext";
+import { useTheme } from "@/lib/ThemeContext";
+import { themeConfigs } from "@/lib/theme-config";
 import ChatPanel from "@/components/chat/ChatPanel";
 import ImageLightbox from "@/components/chat/ImageLightbox";
 
@@ -25,24 +27,27 @@ const Terminal = dynamic(() => import("@/components/Terminal"), {
   ssr: false,
   loading: () => (
     <div className="flex items-center justify-center h-full">
-      <div className="animate-spin h-8 w-8 border-2 border-violet-500 border-t-transparent rounded-full" />
+      <div className="animate-spin h-8 w-8 border-2 border-accent border-t-transparent rounded-full" />
     </div>
   ),
 });
 
 export default function Dashboard() {
   return (
-    <UserProvider>
-      <PresenceProvider>
-        <DashboardInner />
-      </PresenceProvider>
-    </UserProvider>
+    <ThemeProvider>
+      <UserProvider>
+        <PresenceProvider>
+          <DashboardInner />
+        </PresenceProvider>
+      </UserProvider>
+    </ThemeProvider>
   );
 }
 
 function DashboardInner() {
   const router = useRouter();
   const { joinSession: presenceJoin } = usePresence();
+  const { theme, toggleTheme } = useTheme();
   const contentRef = useRef<HTMLDivElement>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [terminalKey, setTerminalKey] = useState(0);
@@ -200,13 +205,13 @@ function DashboardInner() {
   }, [activeSessionId]);
 
   return (
-    <div className="flex h-screen bg-black">
+    <div className="flex h-screen bg-background">
       {/* Desktop sidebar */}
       {!fullscreen && (
         <div
           className={`hidden md:block ${
             sidebarOpen ? "w-72" : "w-0"
-          } transition-all duration-200 border-r border-zinc-800/30 bg-zinc-950/90 overflow-hidden flex-shrink-0`}
+          } transition-all duration-200 border-r border-border bg-surface overflow-hidden flex-shrink-0`}
         >
           <SessionList
             activeSessionId={activeSessionId}
@@ -218,6 +223,8 @@ function DashboardInner() {
             resumingSessionId={resumingSessionId}
             creatingSession={creatingSession}
             onLogout={handleLogout}
+            onToggleTheme={toggleTheme}
+            theme={theme}
           />
         </div>
       )}
@@ -241,13 +248,13 @@ function DashboardInner() {
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="fixed top-0 left-0 bottom-0 w-72 z-40 bg-zinc-950 border-r border-zinc-800/30 md:hidden"
+              className="fixed top-0 left-0 bottom-0 w-72 z-40 bg-surface border-r border-border md:hidden"
             >
               {/* Close button */}
               <div className="absolute top-3 right-3 z-50">
                 <button
                   onClick={() => setMobileSidebarOpen(false)}
-                  className="p-2 text-zinc-400 hover:text-zinc-200 transition-colors"
+                  className="p-2 text-muted-fg hover:text-foreground transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -261,6 +268,8 @@ function DashboardInner() {
                 onResumeSession={handleResumeSession}
                 resumingSessionId={resumingSessionId}
                 onLogout={handleLogout}
+                onToggleTheme={toggleTheme}
+                theme={theme}
               />
             </motion.div>
           </>
@@ -291,34 +300,20 @@ function DashboardInner() {
             viewMode === "files" ? (
               /* File Manager */
               <div className="absolute inset-0 m-1 md:m-2">
-                <MovingBorderButton
-                  as="div"
-                  borderRadius="0.75rem"
-                  containerClassName="w-full h-full"
-                  borderClassName="bg-[radial-gradient(var(--violet-500)_40%,transparent_60%)]"
-                  className="w-full h-full bg-[#0a0a0a] p-0 overflow-hidden"
-                  duration={8000}
-                >
+                <div className="w-full h-full rounded-xl border border-border bg-surface-alt overflow-hidden">
                   <FileManager sessionId={activeSessionId} />
-                </MovingBorderButton>
+                </div>
               </div>
             ) : isActiveSessionStopped ? (
               /* Stopped session overlay */
               <div className="absolute inset-0 m-1 md:m-2">
-                <MovingBorderButton
-                  as="div"
-                  borderRadius="0.75rem"
-                  containerClassName="w-full h-full"
-                  borderClassName="bg-[radial-gradient(var(--violet-500)_40%,transparent_60%)]"
-                  className="w-full h-full bg-[#0a0a0a] p-0 overflow-hidden"
-                  duration={8000}
-                >
+                <div className="w-full h-full rounded-xl border border-border bg-surface-alt overflow-hidden">
                   <StoppedSessionOverlay
                     sessionName={activeSessionName || activeSessionId}
                     onResume={handleResumeSession}
                     resuming={resumingSessionId === activeSessionId}
                   />
-                </MovingBorderButton>
+                </div>
               </div>
             ) : (
               /* Terminal — presence system lives here ONLY */
@@ -330,7 +325,7 @@ function DashboardInner() {
                 {/* Fullscreen toggle */}
                 <button
                   onClick={() => setFullscreen(!fullscreen)}
-                  className="absolute top-2 right-2 z-10 p-2 md:p-1.5 text-zinc-600 hover:text-zinc-300 transition-colors bg-zinc-900/80 rounded-md backdrop-blur-sm"
+                  className="absolute top-2 right-2 z-10 p-2 md:p-1.5 text-muted hover:text-foreground transition-colors bg-surface-alt/80 rounded-md backdrop-blur-sm"
                   title={fullscreen ? "Выйти из полноэкранного" : "Полноэкранный режим"}
                 >
                   {fullscreen ? (
@@ -340,21 +335,14 @@ function DashboardInner() {
                   )}
                 </button>
 
-                <MovingBorderButton
-                  as="div"
-                  borderRadius="0.75rem"
-                  containerClassName="w-full h-full"
-                  borderClassName="bg-[radial-gradient(var(--violet-500)_40%,transparent_60%)]"
-                  className="w-full h-full bg-[#0a0a0a] p-0 overflow-hidden"
-                  duration={8000}
-                >
+                <div className="w-full h-full rounded-xl border border-border bg-surface-alt overflow-hidden">
                   <Terminal
                     key={terminalKey}
                     sessionId={activeSessionId}
                     fullscreen={fullscreen}
                     onConnectionChange={handleConnectionChange}
                   />
-                </MovingBorderButton>
+                </div>
               </div>
             )
           ) : (
@@ -362,7 +350,7 @@ function DashboardInner() {
               {/* Spotlight background */}
               <Spotlight
                 className="-top-40 left-0 md:left-60 md:-top-20"
-                fill="rgba(139, 92, 246, 0.15)"
+                fill={themeConfigs[theme].spotlightFill}
               />
 
               <div className="text-center max-w-md relative z-10">
@@ -370,17 +358,17 @@ function DashboardInner() {
                   <TypewriterEffect
                     words={[
                       { text: "Claude", className: "text-white" },
-                      { text: "Terminal", className: "text-violet-400" },
+                      { text: "Terminal", className: "text-accent-fg" },
                     ]}
                     className="text-xl md:text-2xl"
-                    cursorClassName="bg-violet-500"
+                    cursorClassName="bg-accent"
                   />
                 </div>
 
-                <div className="mb-2 text-zinc-400 text-sm md:text-base">
+                <div className="mb-2 text-muted-fg text-sm md:text-base">
                   <FlipWords
                     words={["Создавайте", "Исследуйте", "Автоматизируйте", "Стройте"]}
-                    className="text-violet-400"
+                    className="text-accent-fg"
                   />
                   <span> с помощью AI</span>
                 </div>
@@ -388,14 +376,14 @@ function DashboardInner() {
                 <div className="mb-8">
                   <TextGenerateEffect
                     words="Создайте новую сессию или выберите существующую из списка слева"
-                    className="text-zinc-500 text-sm leading-relaxed"
+                    className="text-muted-fg text-sm leading-relaxed"
                   />
                 </div>
 
                 <HoverBorderGradient
                   as="button"
                   containerClassName="mx-auto"
-                  className="flex items-center justify-center gap-2 bg-zinc-950 text-white px-6 py-3 text-sm font-medium"
+                  className="flex items-center justify-center gap-2 bg-surface text-foreground px-6 py-3 text-sm font-medium"
                   onClick={handleNewSession}
                 >
                   Начать общение
@@ -423,13 +411,13 @@ function DashboardInner() {
                   animate={{ x: 0 }}
                   exit={{ x: "100%" }}
                   transition={{ type: "spring", damping: 30, stiffness: 300 }}
-                  className="fixed md:absolute top-0 right-0 bottom-0 w-full sm:w-80 md:w-96 z-50 md:z-20 bg-zinc-950 border-l border-zinc-800/30"
+                  className="fixed md:absolute top-0 right-0 bottom-0 w-full sm:w-80 md:w-96 z-50 md:z-20 bg-surface border-l border-border"
                 >
                   {/* Close button — mobile */}
                   <div className="absolute top-2 right-2 z-10 md:hidden">
                     <button
                       onClick={() => setChatOpen(false)}
-                      className="p-2 text-zinc-400 hover:text-zinc-200 transition-colors"
+                      className="p-2 text-muted-fg hover:text-foreground transition-colors"
                     >
                       <X className="w-5 h-5" />
                     </button>

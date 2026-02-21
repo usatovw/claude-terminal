@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/lib/ThemeContext";
 
 type Direction = "TOP" | "LEFT" | "BOTTOM" | "RIGHT";
 
@@ -25,6 +26,7 @@ export function HoverBorderGradient({
 >) {
   const [hovered, setHovered] = useState<boolean>(false);
   const [direction, setDirection] = useState<Direction>("TOP");
+  const { theme } = useTheme();
 
   const rotateDirection = (currentDirection: Direction): Direction => {
     const directions: Direction[] = ["TOP", "LEFT", "BOTTOM", "RIGHT"];
@@ -55,6 +57,29 @@ export function HoverBorderGradient({
       return () => clearInterval(interval);
     }
   }, [hovered]);
+
+  // Retro theme: simple bordered container without animated gradient
+  if (theme === "retro") {
+    return (
+      <Tag
+        className={cn(
+          "relative flex content-center items-center justify-center rounded-full border-2 border-border-strong h-min w-fit cursor-pointer shadow-[var(--th-shadow)]",
+          containerClassName,
+        )}
+        {...props}
+      >
+        <div
+          className={cn(
+            "z-10 w-auto rounded-[inherit] bg-surface px-4 py-2 text-foreground",
+            className,
+          )}
+        >
+          {children}
+        </div>
+      </Tag>
+    );
+  }
+
   return (
     <Tag
       onMouseEnter={(event: React.MouseEvent<HTMLDivElement>) => {

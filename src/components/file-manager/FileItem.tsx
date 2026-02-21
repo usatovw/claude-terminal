@@ -94,8 +94,8 @@ export default function FileItem({
       onDoubleClick={handleDoubleClick}
       className={`grid items-center px-2 md:px-4 py-2.5 md:py-2 transition-all duration-150 group cursor-pointer ${
         isSelected
-          ? "bg-gradient-to-r from-violet-500/10 to-indigo-500/10"
-          : "hover:bg-zinc-800/50"
+          ? "bg-gradient-to-r from-accent/10 to-indigo-500/10"
+          : "hover:bg-surface-hover/50"
       }`}
       style={{ gridTemplateColumns }}
     >
@@ -105,18 +105,18 @@ export default function FileItem({
         onClick={(e) => { e.stopPropagation(); onCheckboxChange(); }}
       >
         {isChecked ? (
-          <CheckSquare className="w-4 h-4 text-violet-400" />
+          <CheckSquare className="w-4 h-4 text-accent-fg" />
         ) : (
-          <Square className="w-4 h-4 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+          <Square className="w-4 h-4 text-muted group-hover:text-muted-fg transition-colors" />
         )}
       </div>
 
       {/* Icon */}
       <div className="flex items-center justify-center">
         {entry.type === "directory" ? (
-          <FolderIcon className="w-5 h-5 text-violet-400" />
+          <FolderIcon className="w-5 h-5 text-accent-fg" />
         ) : (
-          <FileIcon className="w-5 h-5 text-zinc-500" />
+          <FileIcon className="w-5 h-5 text-muted-fg" />
         )}
       </div>
 
@@ -131,13 +131,13 @@ export default function FileItem({
             onBlur={onRenameSubmit}
             onKeyDown={handleKeyDown}
             onClick={(e) => e.stopPropagation()}
-            className="text-sm text-zinc-200 bg-zinc-900 border border-zinc-600 rounded px-2 py-0.5 w-full outline-none focus:border-violet-500/50"
+            className="text-sm text-foreground bg-surface-alt border border-border-strong rounded px-2 py-0.5 w-full outline-none focus:border-accent/50"
           />
         ) : (
-          <span className="text-sm text-zinc-300 truncate block">
+          <span className="text-sm text-foreground truncate block">
             {entry.relativePath && entry.relativePath !== entry.name ? (
               <>
-                <span className="text-zinc-600">{entry.relativePath.slice(0, entry.relativePath.length - entry.name.length)}</span>
+                <span className="text-muted">{entry.relativePath.slice(0, entry.relativePath.length - entry.name.length)}</span>
                 {entry.name}
               </>
             ) : (
@@ -148,12 +148,12 @@ export default function FileItem({
       </div>
 
       {/* Size */}
-      <div className="text-xs text-zinc-600 text-right hidden md:block">
+      <div className="text-xs text-muted text-right hidden md:block">
         {entry.type === "file" ? formatFileSize(entry.size) : ""}
       </div>
 
       {/* Modified */}
-      <div className="text-xs text-zinc-600 text-right hidden md:block">
+      <div className="text-xs text-muted text-right hidden md:block">
         {relativeTime(entry.modifiedAt)}
       </div>
 
@@ -162,7 +162,7 @@ export default function FileItem({
         {entry.type === "file" && (
           <button
             onClick={(e) => { e.stopPropagation(); onDownload(); }}
-            className="p-2 md:p-1 text-zinc-500 hover:text-violet-400 transition-colors cursor-pointer"
+            className="p-2 md:p-1 text-muted-fg hover:text-accent-fg transition-colors cursor-pointer"
             title="Скачать"
           >
             <Download className="w-4 h-4 md:w-3.5 md:h-3.5" />
@@ -170,14 +170,14 @@ export default function FileItem({
         )}
         <button
           onClick={(e) => { e.stopPropagation(); onRenameStart(); }}
-          className="p-2 md:p-1 text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
+          className="p-2 md:p-1 text-muted-fg hover:text-foreground transition-colors cursor-pointer"
           title="Переименовать"
         >
           <Pencil className="w-4 h-4 md:w-3.5 md:h-3.5" />
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          className="p-2 md:p-1 text-zinc-500 hover:text-red-400 transition-colors cursor-pointer"
+          className="p-2 md:p-1 text-muted-fg hover:text-danger transition-colors cursor-pointer"
           title="Удалить"
         >
           <Trash className="w-4 h-4 md:w-3.5 md:h-3.5" />

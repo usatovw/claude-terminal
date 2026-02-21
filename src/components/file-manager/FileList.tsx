@@ -63,22 +63,22 @@ export default function FileList({
     if (searchQuery) {
       return (
         <div className="flex flex-col items-center justify-center py-16 gap-3">
-          <Search className="w-8 h-8 text-zinc-700" />
-          <span className="text-zinc-500 text-sm">Ничего не нашлось</span>
+          <Search className="w-8 h-8 text-muted" />
+          <span className="text-muted-fg text-sm">Ничего не нашлось</span>
         </div>
       );
     }
     if (isRootPath) {
       return (
         <div className="flex flex-col items-center justify-center py-16 gap-3">
-          <FolderIcon className="w-8 h-8 text-zinc-700" />
-          <span className="text-zinc-500 text-sm">Файлы сессии будут доступны здесь</span>
+          <FolderIcon className="w-8 h-8 text-muted" />
+          <span className="text-muted-fg text-sm">Файлы сессии будут доступны здесь</span>
         </div>
       );
     }
     return (
       <div className="flex items-center justify-center py-16">
-        <span className="text-zinc-500 text-sm">Папка пуста</span>
+        <span className="text-muted-fg text-sm">Папка пуста</span>
       </div>
     );
   };
@@ -98,12 +98,12 @@ export default function FileList({
 
       {loading ? (
         <div className="flex items-center justify-center py-16">
-          <div className="animate-spin h-6 w-6 border-2 border-violet-500 border-t-transparent rounded-full" />
+          <div className="animate-spin h-6 w-6 border-2 border-accent border-t-transparent rounded-full" />
         </div>
       ) : entries.length === 0 ? (
         renderEmptyState()
       ) : (
-        <div className="divide-y divide-zinc-800/30">
+        <div className="divide-y divide-border">
           <AnimatePresence mode="popLayout">
             {entries.map((entry) => (
               <FileItem

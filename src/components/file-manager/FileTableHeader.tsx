@@ -102,14 +102,14 @@ export default function FileTableHeader({
   return (
     <div
       ref={headerRef}
-      className="grid items-center border-b border-zinc-800/50 px-2 md:px-4 py-2 select-none"
+      className="grid items-center border-b border-border px-2 md:px-4 py-2 select-none"
       style={{ gridTemplateColumns: columnWidths }}
     >
       {/* Checkbox */}
       <div className="flex items-center justify-center">
         <button
           onClick={onSelectAll}
-          className="text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
+          className="text-muted-fg hover:text-foreground transition-colors cursor-pointer"
         >
           <CheckboxIcon className="w-4 h-4" />
         </button>
@@ -123,7 +123,7 @@ export default function FileTableHeader({
         <button
           onClick={() => onSortChange("name")}
           className={`flex items-center gap-1 text-xs uppercase tracking-wider transition-colors cursor-pointer ${
-            sortBy === "name" ? "text-zinc-300" : "text-zinc-500 hover:text-zinc-300"
+            sortBy === "name" ? "text-foreground" : "text-muted-fg hover:text-foreground"
           }`}
         >
           <span>Имя</span>
@@ -131,7 +131,7 @@ export default function FileTableHeader({
         </button>
         {/* Resize handle */}
         <div
-          className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-violet-500/30 transition-colors hidden md:block"
+          className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-accent/30 transition-colors hidden md:block"
           onMouseDown={(e) => {
             e.preventDefault();
             handleResize(0, e.clientX);
@@ -144,7 +144,7 @@ export default function FileTableHeader({
         <button
           onClick={() => onSortChange("size")}
           className={`flex items-center gap-1 text-xs uppercase tracking-wider transition-colors cursor-pointer ${
-            sortBy === "size" ? "text-zinc-300" : "text-zinc-500 hover:text-zinc-300"
+            sortBy === "size" ? "text-foreground" : "text-muted-fg hover:text-foreground"
           }`}
         >
           <span>Размер</span>
@@ -152,7 +152,7 @@ export default function FileTableHeader({
         </button>
         {/* Resize handle */}
         <div
-          className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-violet-500/30 transition-colors"
+          className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-accent/30 transition-colors"
           onMouseDown={(e) => {
             e.preventDefault();
             handleResize(1, e.clientX);
@@ -165,7 +165,7 @@ export default function FileTableHeader({
         <button
           onClick={() => onSortChange("modifiedAt")}
           className={`flex items-center gap-1 text-xs uppercase tracking-wider transition-colors cursor-pointer ${
-            sortBy === "modifiedAt" ? "text-zinc-300" : "text-zinc-500 hover:text-zinc-300"
+            sortBy === "modifiedAt" ? "text-foreground" : "text-muted-fg hover:text-foreground"
           }`}
         >
           <span>Дата</span>
@@ -173,7 +173,7 @@ export default function FileTableHeader({
         </button>
         {/* Resize handle */}
         <div
-          className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-violet-500/30 transition-colors"
+          className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-accent/30 transition-colors"
           onMouseDown={(e) => {
             e.preventDefault();
             handleResize(2, e.clientX);

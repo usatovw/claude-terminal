@@ -26,6 +26,7 @@ const ALLOWED_MIME_TYPES = new Set([
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "text/plain",
+  "text/html",
   "application/zip",
 ]);
 

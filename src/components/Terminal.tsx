@@ -5,6 +5,8 @@ import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
+import { useTheme } from "@/lib/ThemeContext";
+import { themeConfigs } from "@/lib/theme-config";
 
 interface TerminalProps {
   sessionId: string;
@@ -18,6 +20,16 @@ export default function Terminal({ sessionId, fullscreen, onConnectionChange }: 
   const wsRef = useRef<WebSocket | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const initRef = useRef(false);
+  const { theme } = useTheme();
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
+
+  // Update terminal theme when theme changes
+  useEffect(() => {
+    if (xtermRef.current) {
+      xtermRef.current.options.theme = themeConfigs[theme].terminal;
+    }
+  }, [theme]);
 
   // Refit xterm when fullscreen changes
   useEffect(() => {
@@ -55,28 +67,7 @@ export default function Terminal({ sessionId, fullscreen, onConnectionChange }: 
       fontSize: 14,
       fontFamily:
         "'Geist Mono', 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
-      theme: {
-        background: "#0a0a0a",
-        foreground: "#e0e0e0",
-        cursor: "#ffffff",
-        selectionBackground: "#264f78",
-        black: "#1a1a2e",
-        red: "#ff6b6b",
-        green: "#51cf66",
-        yellow: "#ffd43b",
-        blue: "#748ffc",
-        magenta: "#cc5de8",
-        cyan: "#66d9e8",
-        white: "#e0e0e0",
-        brightBlack: "#495057",
-        brightRed: "#ff8787",
-        brightGreen: "#69db7c",
-        brightYellow: "#ffe066",
-        brightBlue: "#91a7ff",
-        brightMagenta: "#e599f7",
-        brightCyan: "#99e9f2",
-        brightWhite: "#ffffff",
-      },
+      theme: themeConfigs[themeRef.current].terminal,
       scrollback: 5000,
     });
 

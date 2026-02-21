@@ -92,14 +92,14 @@ export default function ChatInput({
   };
 
   return (
-    <div className="border-t border-zinc-800/50 bg-zinc-950/90">
+    <div className="border-t border-border bg-surface">
       {/* Pending files preview */}
       {pendingFiles.length > 0 && (
         <div className="flex gap-2 px-3 pt-2 pb-1 overflow-x-auto">
           {pendingFiles.map((pf, i) => (
             <div
               key={i}
-              className="relative flex-shrink-0 rounded-lg border border-zinc-800/50 overflow-hidden group"
+              className="relative flex-shrink-0 rounded-lg border border-border overflow-hidden group"
             >
               {pf.preview ? (
                 <img
@@ -108,13 +108,13 @@ export default function ChatInput({
                   className="w-16 h-16 object-cover"
                 />
               ) : (
-                <div className="w-16 h-16 bg-zinc-900 flex items-center justify-center text-[10px] text-zinc-500 px-1 text-center">
+                <div className="w-16 h-16 bg-surface-alt flex items-center justify-center text-[10px] text-muted-fg px-1 text-center">
                   {pf.file.name.split(".").pop()?.toUpperCase()}
                 </div>
               )}
               <button
                 onClick={() => removeFile(i)}
-                className="absolute top-0.5 right-0.5 w-4 h-4 bg-zinc-900/90 rounded-full flex items-center justify-center text-zinc-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                className="absolute top-0.5 right-0.5 w-4 h-4 bg-surface-alt/90 rounded-full flex items-center justify-center text-muted-fg hover:text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
               >
                 <X className="w-3 h-3" />
               </button>
@@ -129,7 +129,7 @@ export default function ChatInput({
         <button
           onClick={handleFileInput}
           disabled={disabled}
-          className="p-1.5 text-zinc-500 hover:text-zinc-300 transition-colors flex-shrink-0 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+          className="p-1.5 text-muted-fg hover:text-foreground transition-colors flex-shrink-0 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
           title="Прикрепить файл"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -140,7 +140,7 @@ export default function ChatInput({
           ref={fileInputRef}
           type="file"
           multiple
-          accept="image/jpeg,image/png,image/gif,image/webp,.pdf,.doc,.docx,.txt,.zip"
+          accept="image/jpeg,image/png,image/gif,image/webp,.pdf,.doc,.docx,.txt,.html,.htm,.zip"
           className="hidden"
           onChange={(e) => {
             if (e.target.files) addFiles(e.target.files);
@@ -158,14 +158,14 @@ export default function ChatInput({
           disabled={disabled}
           placeholder={disabled ? disabledTooltip : "Сообщение..."}
           rows={1}
-          className="flex-1 bg-transparent text-sm text-zinc-200 placeholder-zinc-600 outline-none resize-none max-h-24 min-h-[20px] disabled:opacity-30 disabled:cursor-not-allowed"
+          className="flex-1 bg-transparent text-sm text-foreground placeholder-muted outline-none resize-none max-h-24 min-h-[20px] disabled:opacity-30 disabled:cursor-not-allowed"
         />
 
         {/* Send button */}
         <button
           onClick={handleSubmit}
           disabled={!hasContent || disabled}
-          className="p-1.5 text-violet-400 hover:text-violet-300 transition-colors flex-shrink-0 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+          className="p-1.5 text-accent-fg hover:text-accent transition-colors flex-shrink-0 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
           title="Отправить"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">

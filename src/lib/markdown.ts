@@ -20,13 +20,13 @@ export function renderMarkdown(text: string): string {
   html = html.replace(
     /```([\s\S]*?)```/g,
     (_, code) =>
-      `<pre class="bg-zinc-800/60 rounded-md px-3 py-2 text-xs overflow-x-auto my-1"><code>${code.trim()}</code></pre>`
+      `<pre class="bg-surface-hover rounded-md px-3 py-2 text-xs overflow-x-auto my-1"><code>${code.trim()}</code></pre>`
   );
 
   // Inline code: `...`
   html = html.replace(
     /`([^`\n]+)`/g,
-    '<code class="bg-zinc-800/60 rounded px-1 py-0.5 text-xs">$1</code>'
+    '<code class="bg-surface-hover rounded px-1 py-0.5 text-xs">$1</code>'
   );
 
   // Bold: **...**
@@ -38,7 +38,7 @@ export function renderMarkdown(text: string): string {
   // Auto-link URLs
   html = html.replace(
     /(https?:\/\/[^\s<]+)/g,
-    '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-violet-400 hover:underline break-all">$1</a>'
+    '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-accent-fg hover:underline break-all">$1</a>'
   );
 
   // Newlines to <br>

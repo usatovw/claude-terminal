@@ -41,13 +41,13 @@ export default function SessionDeleteModal({
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.15 }}
             onClick={(e) => e.stopPropagation()}
-            className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 max-w-sm w-full shadow-2xl"
+            className="bg-surface-alt border border-border-strong rounded-xl p-5 max-w-sm w-full shadow-2xl"
           >
-            <h3 className="text-sm font-medium text-zinc-200 mb-2">
+            <h3 className="text-sm font-medium text-foreground mb-2">
               Удалить сессию?
             </h3>
 
-            <p className="text-xs text-zinc-400 mb-4">
+            <p className="text-xs text-muted-fg mb-4">
               {session.displayName || session.sessionId}
             </p>
 
@@ -57,11 +57,11 @@ export default function SessionDeleteModal({
                 onClick={() => setDeleteFiles((v) => !v)}
               >
                 {deleteFiles ? (
-                  <CheckSquare className="w-4 h-4 text-red-400" />
+                  <CheckSquare className="w-4 h-4 text-danger" />
                 ) : (
-                  <Square className="w-4 h-4 text-zinc-500 group-hover:text-zinc-300 transition-colors" />
+                  <Square className="w-4 h-4 text-muted-fg group-hover:text-foreground transition-colors" />
                 )}
-                <span className="text-xs text-zinc-300">
+                <span className="text-xs text-foreground">
                   Также удалить все файлы сессии
                 </span>
               </label>
@@ -70,14 +70,14 @@ export default function SessionDeleteModal({
             <div className="flex items-center justify-end gap-2">
               <button
                 onClick={onCancel}
-                className="px-4 py-2 text-xs text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+                className="px-4 py-2 text-xs text-muted-fg hover:text-foreground transition-colors cursor-pointer"
               >
                 Отмена
               </button>
               <HoverBorderGradient
                 as="button"
                 containerClassName=""
-                className="bg-red-950 text-red-300 px-4 py-1.5 text-xs font-medium"
+                className="bg-danger/20 text-danger px-4 py-1.5 text-xs font-medium"
                 onClick={() => onConfirm(hasFiles ? deleteFiles : true)}
               >
                 Удалить

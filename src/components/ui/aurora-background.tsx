@@ -1,6 +1,7 @@
 "use client";
 import { cn } from "@/lib/utils";
 import React, { ReactNode } from "react";
+import { useTheme } from "@/lib/ThemeContext";
 
 interface AuroraBackgroundProps extends React.HTMLProps<HTMLDivElement> {
   children: ReactNode;
@@ -13,6 +14,26 @@ export const AuroraBackground = ({
   showRadialGradient = true,
   ...props
 }: AuroraBackgroundProps) => {
+  const { theme } = useTheme();
+
+  // Retro theme: simple static background instead of animated aurora
+  if (theme === "retro") {
+    return (
+      <main>
+        <div
+          className={cn(
+            "relative flex h-[100vh] flex-col items-center justify-center",
+            className,
+          )}
+          {...props}
+        >
+          <div className="absolute inset-0 bg-background" />
+          <div className="relative z-10">{children}</div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main>
       <div

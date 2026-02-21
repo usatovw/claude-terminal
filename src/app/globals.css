@@ -1,10 +1,27 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-background: #0a0a0a;
-  --color-foreground: #ededed;
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Semantic color tokens — resolved via CSS vars per theme */
+  --color-background: var(--th-bg);
+  --color-foreground: var(--th-fg);
+  --color-surface: var(--th-surface);
+  --color-surface-alt: var(--th-surface-alt);
+  --color-surface-hover: var(--th-surface-hover);
+  --color-surface-active: var(--th-surface-active);
+  --color-border: var(--th-border);
+  --color-border-strong: var(--th-border-strong);
+  --color-muted: var(--th-muted);
+  --color-muted-fg: var(--th-muted-fg);
+  --color-accent: var(--th-accent);
+  --color-accent-fg: var(--th-accent-fg);
+  --color-accent-muted: var(--th-accent-muted);
+  --color-accent-hover: var(--th-accent-hover);
+  --color-danger: var(--th-danger);
+  --color-success: var(--th-success);
+  --color-warning: var(--th-warning);
+
+  --font-sans: var(--th-font-sans);
+  --font-mono: var(--th-font-mono);
 
   --animate-aurora: aurora 60s linear infinite;
   --animate-spotlight: spotlight 2s ease 0.75s 1 forwards;
@@ -30,13 +47,102 @@
   }
 }
 
+/* ============================================
+   DARK VIOLET THEME (default)
+   ============================================ */
+:root {
+  --th-bg: #0a0a0a;
+  --th-fg: #e4e4e7;
+  --th-surface: #09090b;
+  --th-surface-alt: #18181b;
+  --th-surface-hover: #27272a;
+  --th-surface-active: rgba(139, 92, 246, 0.1);
+  --th-border: rgba(39, 39, 42, 0.5);
+  --th-border-strong: #3f3f46;
+  --th-muted: #52525b;
+  --th-muted-fg: #71717a;
+  --th-accent: #8b5cf6;
+  --th-accent-fg: #a78bfa;
+  --th-accent-muted: rgba(139, 92, 246, 0.2);
+  --th-accent-hover: rgba(139, 92, 246, 0.1);
+  --th-danger: #f87171;
+  --th-success: #34d399;
+  --th-warning: #fbbf24;
+  --th-font-sans: var(--font-geist-sans);
+  --th-font-mono: var(--font-geist-mono);
+  --th-radius: 0.75rem;
+  --th-radius-sm: 0.5rem;
+  --th-shadow: none;
+  --th-shadow-sm: none;
+  --th-border-w: 1px;
+}
+
+/* ============================================
+   RETRO OS THEME
+   ============================================ */
+[data-theme="retro"] {
+  --th-bg: #d8d3c5;
+  --th-fg: #1a1a1a;
+  --th-surface: #ffffff;
+  --th-surface-alt: #f3f1ed;
+  --th-surface-hover: #e0dbd0;
+  --th-surface-active: rgba(180, 120, 0, 0.12);
+  --th-border: rgba(0, 0, 0, 0.3);
+  --th-border-strong: #000000;
+  --th-muted: #8a8480;
+  --th-muted-fg: #5c5650;
+  --th-accent: #e09000;
+  --th-accent-fg: #9a6400;
+  --th-accent-muted: rgba(180, 120, 0, 0.18);
+  --th-accent-hover: rgba(180, 120, 0, 0.08);
+  --th-danger: #c0392b;
+  --th-success: #2e7d32;
+  --th-warning: #e09000;
+  --th-font-sans: var(--font-space-grotesk);
+  --th-font-mono: "Space Mono", "Courier New", monospace;
+  --th-radius: 0.375rem;
+  --th-radius-sm: 0.25rem;
+  --th-shadow: 4px 4px 0px rgba(0, 0, 0, 1);
+  --th-shadow-sm: 2px 2px 0px rgba(0, 0, 0, 1);
+  --th-border-w: 2px;
+}
+
+/* ============================================
+   BASE STYLES
+   ============================================ */
 body {
   background: var(--color-background);
   color: var(--color-foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
 }
 
-/* xterm.js styling overrides */
+/* ============================================
+   RETRO THEME OVERRIDES
+   ============================================ */
+
+/* Disable glassmorphism in retro */
+[data-theme="retro"] .backdrop-blur-xl,
+[data-theme="retro"] .backdrop-blur-sm,
+[data-theme="retro"] .backdrop-blur-md {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* Retro scrollbars */
+[data-theme="retro"] .xterm-viewport::-webkit-scrollbar-track {
+  background: #c8c3b5;
+}
+[data-theme="retro"] .xterm-viewport::-webkit-scrollbar-thumb {
+  background: #8a8480;
+  border-radius: 0;
+}
+[data-theme="retro"] .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: #6b6560;
+}
+
+/* ============================================
+   XTERM STYLING
+   ============================================ */
 .xterm {
   padding: 8px;
 }
@@ -58,6 +164,9 @@ body {
   background: rgba(255, 255, 255, 0.3);
 }
 
+/* ============================================
+   PRESENCE CURSOR OVERRIDE
+   ============================================ */
 .presence-active,
 .presence-active * {
   cursor: none !important;

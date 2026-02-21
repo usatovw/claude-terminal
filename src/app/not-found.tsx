@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { motion } from "motion/react";
 import { LampContainer } from "@/components/ui/lamp";
 import { HoverBorderGradient } from "@/components/ui/hover-border-gradient";
@@ -7,6 +8,18 @@ import { useRouter } from "next/navigation";
 
 export default function NotFound() {
   const router = useRouter();
+  const savedThemeRef = useRef<string | null>(null);
+
+  // Force dark theme on 404 page
+  useEffect(() => {
+    savedThemeRef.current = document.documentElement.getAttribute("data-theme");
+    document.documentElement.removeAttribute("data-theme");
+    return () => {
+      if (savedThemeRef.current) {
+        document.documentElement.setAttribute("data-theme", savedThemeRef.current);
+      }
+    };
+  }, []);
 
   return (
     <LampContainer>
@@ -19,13 +32,13 @@ export default function NotFound() {
         <h1 className="text-8xl md:text-9xl font-bold bg-clip-text text-transparent bg-gradient-to-br from-violet-300 to-violet-600 tracking-tighter">
           404
         </h1>
-        <p className="text-zinc-400 text-lg md:text-xl text-center max-w-md">
+        <p className="text-muted-fg text-lg md:text-xl text-center max-w-md">
           Здесь ничего нет. Совсем.
         </p>
         <HoverBorderGradient
           as="button"
           containerClassName=""
-          className="flex items-center gap-2 bg-zinc-900 text-white px-8 py-3 text-sm"
+          className="flex items-center gap-2 bg-surface-alt text-foreground px-8 py-3 text-sm"
           onClick={() => router.push("/")}
         >
           На главную

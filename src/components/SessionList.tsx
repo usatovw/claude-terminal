@@ -6,6 +6,7 @@ import { HoverBorderGradient } from "@/components/ui/hover-border-gradient";
 import { relativeTime } from "@/lib/utils";
 import SessionDeleteModal from "@/components/SessionDeleteModal";
 import PresenceAvatars from "@/components/presence/PresenceAvatars";
+import type { ThemeId } from "@/lib/ThemeContext";
 
 interface Session {
   sessionId: string;
@@ -27,6 +28,8 @@ interface SessionListProps {
   resumingSessionId?: string | null;
   creatingSession?: boolean;
   onLogout?: () => void;
+  onToggleTheme?: () => void;
+  theme?: ThemeId;
 }
 
 export default function SessionList({
@@ -39,6 +42,8 @@ export default function SessionList({
   resumingSessionId,
   creatingSession,
   onLogout,
+  onToggleTheme,
+  theme,
 }: SessionListProps) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -126,11 +131,11 @@ export default function SessionList({
   return (
     <div className="flex flex-col h-full">
       {/* New session button */}
-      <div className="h-14 px-3 flex items-center border-b border-zinc-800/50">
+      <div className="h-14 px-3 flex items-center border-b border-border">
         <HoverBorderGradient
           as="button"
           containerClassName="w-full"
-          className="w-full flex items-center justify-center gap-2 bg-zinc-950 text-white px-4 py-2 text-sm font-medium"
+          className="w-full flex items-center justify-center gap-2 bg-surface text-foreground px-4 py-2 text-sm font-medium"
           onClick={creatingSession ? undefined : onNewSession}
         >
           {creatingSession ? (
@@ -146,7 +151,7 @@ export default function SessionList({
 
       <div className="flex-1 overflow-y-auto p-2 space-y-4">
         {sessions.length === 0 && (
-          <p className="text-zinc-600 text-sm text-center py-8">
+          <p className="text-muted text-sm text-center py-8">
             Нет сессий
           </p>
         )}
@@ -154,7 +159,7 @@ export default function SessionList({
         {/* Active sessions */}
         {activeSessions.length > 0 && (
           <div>
-            <div className="px-2 py-1.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">
+            <div className="px-2 py-1.5 text-xs font-medium text-muted-fg uppercase tracking-wider">
               Активные
             </div>
             {activeSessions.map((session) => (
@@ -182,7 +187,7 @@ export default function SessionList({
         {/* Stopped sessions */}
         {stoppedSessions.length > 0 && (
           <div>
-            <div className="px-2 py-1.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">
+            <div className="px-2 py-1.5 text-xs font-medium text-muted-fg uppercase tracking-wider">
               Остановленные
             </div>
             {stoppedSessions.map((session) => (
@@ -208,17 +213,31 @@ export default function SessionList({
         )}
       </div>
 
-      {/* Logout button — fixed at bottom */}
-      {onLogout && (
-        <div className="border-t border-zinc-800/50 px-3 py-2">
+      {/* Footer — theme toggle + logout */}
+      <div className="border-t border-border px-3 py-2 flex items-center justify-between">
+        {onToggleTheme && (
+          <button
+            onClick={onToggleTheme}
+            className="flex items-center gap-1.5 text-xs text-muted hover:text-foreground transition-colors cursor-pointer"
+            title={theme === "dark" ? "Retro OS" : "Dark Violet"}
+          >
+            {theme === "dark" ? (
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+            ) : (
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+            )}
+            <span>{theme === "dark" ? "Retro" : "Dark"}</span>
+          </button>
+        )}
+        {onLogout && (
           <button
             onClick={onLogout}
-            className="text-xs text-zinc-600 hover:text-red-400 transition-colors w-full text-left px-2 py-1 cursor-pointer"
+            className="text-xs text-muted hover:text-danger transition-colors cursor-pointer"
           >
             Выйти
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       <SessionDeleteModal
         session={deleteTarget}
@@ -268,8 +287,8 @@ function SessionItem({
       onClick={onSelect}
       className={`px-3 py-3 md:py-2.5 rounded-lg transition-all duration-150 group cursor-pointer ${
         isSelected
-          ? "bg-gradient-to-r from-violet-500/10 to-indigo-500/10 border border-violet-500/20"
-          : "hover:bg-zinc-800/50 border border-transparent"
+          ? "bg-accent-hover border border-accent-muted"
+          : "hover:bg-surface-hover border border-transparent"
       }`}
     >
       <div className="flex items-center justify-between gap-2">
@@ -281,7 +300,7 @@ function SessionItem({
               className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
                 session.isActive
                   ? "bg-emerald-400 shadow-sm shadow-emerald-400/50"
-                  : "bg-zinc-600"
+                  : "bg-muted"
               }`}
             />
           )}
@@ -293,11 +312,11 @@ function SessionItem({
               onBlur={onRenameSubmit}
               onKeyDown={onRenameKeyDown}
               onClick={(e) => e.stopPropagation()}
-              className="text-sm text-zinc-200 bg-zinc-900 border border-zinc-600 rounded px-2 py-0.5 w-full outline-none focus:border-violet-500/50"
+              className="text-sm text-foreground bg-surface-alt border border-border rounded px-2 py-0.5 w-full outline-none focus:border-accent"
               autoFocus
             />
           ) : (
-            <span className="text-sm text-zinc-300 truncate">
+            <span className="text-sm text-foreground truncate">
               {session.displayName || session.sessionId}
             </span>
           )}
@@ -312,7 +331,7 @@ function SessionItem({
           ) : session.isActive ? (
             <button
               onClick={onStop}
-              className="p-2 md:p-1 text-zinc-500 hover:text-amber-400 transition-colors cursor-pointer"
+              className="p-2 md:p-1 text-muted-fg hover:text-amber-400 transition-colors cursor-pointer"
               title="Остановить"
             >
               <Pause className="w-4 h-4 md:w-3.5 md:h-3.5" />
@@ -320,7 +339,7 @@ function SessionItem({
           ) : (
             <button
               onClick={onResume}
-              className="p-2 md:p-1 text-zinc-500 hover:text-emerald-400 transition-colors cursor-pointer"
+              className="p-2 md:p-1 text-muted-fg hover:text-emerald-400 transition-colors cursor-pointer"
               title="Возобновить"
             >
               <Play className="w-4 h-4 md:w-3.5 md:h-3.5" />
@@ -329,7 +348,7 @@ function SessionItem({
           {onOpenFiles && (
             <button
               onClick={onOpenFiles}
-              className="p-2 md:p-1 text-zinc-500 hover:text-violet-400 transition-colors cursor-pointer"
+              className="p-2 md:p-1 text-muted-fg hover:text-accent-fg transition-colors cursor-pointer"
               title="Файлы"
             >
               <FolderIcon className="w-4 h-4 md:w-3.5 md:h-3.5" />
@@ -337,14 +356,14 @@ function SessionItem({
           )}
           <button
             onClick={onRenameStart}
-            className="p-2 md:p-1 text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
+            className="p-2 md:p-1 text-muted-fg hover:text-foreground transition-colors cursor-pointer"
             title="Переименовать"
           >
             <Pencil className="w-4 h-4 md:w-3.5 md:h-3.5" />
           </button>
           <button
             onClick={onDelete}
-            className="p-2 md:p-1 text-zinc-500 hover:text-red-400 transition-colors cursor-pointer"
+            className="p-2 md:p-1 text-muted-fg hover:text-danger transition-colors cursor-pointer"
             title="Удалить"
           >
             <Trash className="w-4 h-4 md:w-3.5 md:h-3.5" />
@@ -352,10 +371,10 @@ function SessionItem({
         </div>
       </div>
 
-      <div className="text-xs text-zinc-600 mt-1 pl-4 flex items-center gap-2">
+      <div className="text-xs text-muted mt-1 pl-4 flex items-center gap-2">
         <span>{relativeTime(session.createdAt)}</span>
         {session.displayName && (
-          <span className="text-zinc-700">{session.sessionId}</span>
+          <span className="text-muted">{session.sessionId}</span>
         )}
         <div className="ml-auto">
           <PresenceAvatars sessionId={session.sessionId} maxVisible={3} />

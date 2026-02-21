@@ -341,9 +341,9 @@ export default function FileManager({ sessionId }: FileManagerProps) {
   }, [deleteConfirm, sessionId, currentPath, fetchEntries]);
 
   return (
-    <div className="flex flex-col w-full h-full bg-[#0a0a0a] rounded-xl overflow-hidden">
+    <div className="flex flex-col w-full h-full bg-background rounded-xl overflow-hidden">
       {/* Toolbar */}
-      <div className="border-b border-zinc-800/50 px-4 py-3 space-y-3">
+      <div className="border-b border-border px-4 py-3 space-y-3">
         <Breadcrumbs currentPath={currentPath} onNavigate={handleBreadcrumbNavigate} />
         <FileToolbar
           searchQuery={searchQuery}

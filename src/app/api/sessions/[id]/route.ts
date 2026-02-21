@@ -15,7 +15,7 @@ function getTM(): TerminalManager {
 
 function authCheck(request: NextRequest): boolean {
   const token = request.cookies.get("auth-token")?.value;
-  return !!token && verifyToken(token);
+  return !!token && !!verifyToken(token);
 }
 
 // Stop and delete

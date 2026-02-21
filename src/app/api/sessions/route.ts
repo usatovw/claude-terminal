@@ -10,7 +10,7 @@ function getTerminalManager() {
 
 function authCheck(request: NextRequest): boolean {
   const token = request.cookies.get("auth-token")?.value;
-  return !!token && verifyToken(token);
+  return !!token && !!verifyToken(token);
 }
 
 export async function GET(request: NextRequest) {

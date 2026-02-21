@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { Wifi, WifiOff, Menu, ChevronLeft, ChevronRight, TerminalIcon, FolderIcon, MessageCircle } from "@/components/Icons";
 
 export type ViewMode = "terminal" | "files";
@@ -15,7 +14,8 @@ interface NavbarProps {
   onMenuClick?: () => void;
   viewMode?: ViewMode;
   onSwitchView?: (mode: ViewMode) => void;
-  onChatOpen?: () => void;
+  chatOpen?: boolean;
+  onToggleChat?: () => void;
 }
 
 export default function Navbar({
@@ -28,15 +28,9 @@ export default function Navbar({
   onMenuClick,
   viewMode,
   onSwitchView,
-  onChatOpen,
+  chatOpen,
+  onToggleChat,
 }: NavbarProps) {
-  const router = useRouter();
-
-  const handleLogout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/");
-  };
-
   return (
     <div className="h-14 border-b border-zinc-800/60 flex items-center justify-between px-3 md:px-5 bg-zinc-950/90 backdrop-blur-xl">
       <div className="flex items-center gap-2">
@@ -100,18 +94,7 @@ export default function Navbar({
         )}
       </div>
 
-      <div className="flex items-center gap-4">
-        {/* Mobile chat button */}
-        {onChatOpen && activeSessionId && (
-          <button
-            onClick={onChatOpen}
-            className="md:hidden p-2 text-zinc-500 hover:text-zinc-300 transition-colors"
-            title="Чат"
-          >
-            <MessageCircle className="w-5 h-5" />
-          </button>
-        )}
-
+      <div className="flex items-center gap-3">
         {/* Session counter */}
         <span className="text-xs text-zinc-600 hidden sm:inline">
           {sessionCount.total > 0
@@ -130,12 +113,20 @@ export default function Navbar({
           </div>
         )}
 
-        <button
-          onClick={handleLogout}
-          className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors p-2 md:p-0"
-        >
-          Выйти
-        </button>
+        {/* Chat toggle button */}
+        {onToggleChat && (
+          <button
+            onClick={onToggleChat}
+            className={`p-2 md:p-1.5 rounded-md transition-all cursor-pointer ${
+              chatOpen
+                ? "border border-violet-500/50 bg-violet-500/10 text-violet-400"
+                : "text-zinc-500 hover:text-zinc-300 border border-transparent"
+            }`}
+            title="Чат"
+          >
+            <MessageCircle className="w-5 h-5 md:w-4 md:h-4" />
+          </button>
+        )}
       </div>
     </div>
   );

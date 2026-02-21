@@ -26,6 +26,7 @@ interface SessionListProps {
   onResumeSession?: (sessionId: string) => void;
   resumingSessionId?: string | null;
   creatingSession?: boolean;
+  onLogout?: () => void;
 }
 
 export default function SessionList({
@@ -37,6 +38,7 @@ export default function SessionList({
   onResumeSession,
   resumingSessionId,
   creatingSession,
+  onLogout,
 }: SessionListProps) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -205,6 +207,18 @@ export default function SessionList({
           </div>
         )}
       </div>
+
+      {/* Logout button — fixed at bottom */}
+      {onLogout && (
+        <div className="border-t border-zinc-800/50 px-3 py-2">
+          <button
+            onClick={onLogout}
+            className="text-xs text-zinc-600 hover:text-red-400 transition-colors w-full text-left px-2 py-1 cursor-pointer"
+          >
+            Выйти
+          </button>
+        </div>
+      )}
 
       <SessionDeleteModal
         session={deleteTarget}

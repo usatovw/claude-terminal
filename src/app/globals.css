@@ -57,3 +57,8 @@ body {
 .xterm-viewport::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.3);
 }
+
+.presence-active,
+.presence-active * {
+  cursor: none !important;
+}

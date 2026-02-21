@@ -8,7 +8,7 @@ interface Peer {
   peerId: string;
   name: string;
   colorIndex: number;
-  cursor?: { x: number; y: number; timestamp: number };
+  cursor?: { x: number; yBot: number; viewportHeight: number; timestamp: number };
 }
 
 export interface ChatMessage {
@@ -48,7 +48,7 @@ interface PresenceContextValue {
   chatMessages: Map<string, ChatMessage>;
   sessionPeers: Record<string, Peer[]>;
   globalChatMessages: GlobalChatMessage[];
-  sendCursor: (x: number, y: number) => void;
+  sendCursor: (x: number, yBot: number, vh: number) => void;
   sendChat: (text: string) => void;
   sendChatClose: () => void;
   joinSession: (sessionId: string) => void;
@@ -144,7 +144,15 @@ export default function PresenceProvider({ children }: { children: React.ReactNo
                 const next = new Map(prev);
                 const existing = next.get(msg.peerId);
                 const base = existing || { peerId: msg.peerId, name: msg.name, colorIndex: msg.colorIndex };
-                next.set(msg.peerId, { ...base, cursor: { x: msg.x, y: msg.y, timestamp: Date.now() } });
+                next.set(msg.peerId, {
+                  ...base,
+                  cursor: {
+                    x: msg.x,
+                    yBot: msg.yBot ?? msg.yAbs ?? msg.y ?? 0,
+                    viewportHeight: msg.vh || 0,
+                    timestamp: Date.now(),
+                  },
+                });
                 return next;
               });
               break;
@@ -242,12 +250,12 @@ export default function PresenceProvider({ children }: { children: React.ReactNo
     }
   }, []);
 
-  const sendCursor = useCallback((x: number, y: number) => {
+  const sendCursor = useCallback((x: number, yBot: number, vh: number) => {
     const now = Date.now();
     if (now - lastCursorSendRef.current < 50) return;
     lastCursorSendRef.current = now;
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: "cursor", x, y }));
+      wsRef.current.send(JSON.stringify({ type: "cursor", x, yBot, vh }));
     }
   }, []);
 

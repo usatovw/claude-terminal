@@ -147,6 +147,12 @@ body {
   padding: 8px;
 }
 
+/* xterm v6: viewport is legacy — kill its bg and native scrollbar (v6 uses SmoothScrollableElement) */
+.xterm .xterm-viewport {
+  background-color: transparent !important;
+  overflow: hidden !important;
+}
+
 .xterm-viewport::-webkit-scrollbar {
   width: 8px;
 }

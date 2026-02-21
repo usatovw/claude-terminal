@@ -266,11 +266,10 @@ export default function Cursor({
         {/* 3. Name tag — hidden for self */}
         {!isLocal && (
           <div
-            className="whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] text-white font-medium border backdrop-blur-md max-w-[150px] truncate mt-1"
+            className="whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] text-white font-semibold max-w-[150px] truncate mt-1"
             style={{
-              backgroundColor: color.cursor + "30",
-              borderColor: color.cursor + "50",
-              boxShadow: `0 0 8px ${color.cursor}25, 0 2px 4px rgba(0,0,0,0.3)`,
+              backgroundColor: color.cursor,
+              boxShadow: `0 0 10px ${color.cursor}50, 0 2px 4px rgba(0,0,0,0.4)`,
               opacity: fadeOpacity,
               transition: "opacity 300ms ease",
             }}

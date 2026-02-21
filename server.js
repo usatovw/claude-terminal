@@ -126,7 +126,7 @@ app.prepare().then(() => {
                 presenceManager.joinSession(peerId, msg.sessionId);
                 break;
               case "cursor":
-                presenceManager.handleCursor(peerId, msg.x, msg.y);
+                presenceManager.handleCursor(peerId, { x: msg.x, yBot: msg.yBot, vh: msg.vh });
                 break;
               case "chat":
                 presenceManager.handleChat(peerId, msg.text);

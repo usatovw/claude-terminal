@@ -7,6 +7,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
 import { useTheme } from "@/lib/ThemeContext";
 import { themeConfigs } from "@/lib/theme-config";
+import { useTerminalScroll } from "@/lib/TerminalScrollContext";
 
 interface TerminalProps {
   sessionId: string;
@@ -23,6 +24,12 @@ export default function Terminal({ sessionId, fullscreen, onConnectionChange }: 
   const { theme } = useTheme();
   const themeRef = useRef(theme);
   themeRef.current = theme;
+
+  const { updateScroll, registerScrollFn } = useTerminalScroll();
+  const updateScrollRef = useRef(updateScroll);
+  updateScrollRef.current = updateScroll;
+  const registerScrollFnRef = useRef(registerScrollFn);
+  registerScrollFnRef.current = registerScrollFn;
 
   // Update terminal theme when theme changes
   useEffect(() => {
@@ -50,6 +57,14 @@ export default function Terminal({ sessionId, fullscreen, onConnectionChange }: 
               rows: term.rows,
             })
           );
+        }
+        // Publish scroll after resize so cursor positions recalculate with new rows
+        if (term) {
+          updateScrollRef.current({
+            viewportY: term.buffer.active.viewportY,
+            rows: term.rows,
+            totalLines: term.buffer.active.length,
+          });
         }
       });
     });
@@ -86,6 +101,30 @@ export default function Terminal({ sessionId, fullscreen, onConnectionChange }: 
 
     xtermRef.current = term;
     fitAddonRef.current = fitAddon;
+
+    // Scroll tracking via xterm API (xterm v6 uses custom scrollbar, not native scrollTop)
+    const publishScroll = () => {
+      updateScrollRef.current({
+        viewportY: term.buffer.active.viewportY,
+        rows: term.rows,
+        totalLines: term.buffer.active.length,
+      });
+    };
+    // onScroll fires AFTER viewportY is updated — safe to read directly
+    const scrollDisposable = term.onScroll(() => publishScroll());
+    // onWriteParsed fires BEFORE xterm auto-scrolls (auto-scroll is deferred to RAF)
+    // → defer our read to next frame so viewportY reflects the auto-scroll
+    const writeDisposable = term.onWriteParsed(() => {
+      requestAnimationFrame(() => publishScroll());
+    });
+    // Defer initial publish until after fitAddon.fit() completes (double RAF)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => publishScroll());
+    });
+    registerScrollFnRef.current((line: number) => {
+      const maxLine = term.buffer.active.baseY;
+      term.scrollToLine(Math.min(maxLine, Math.max(0, Math.round(line - term.rows / 2))));
+    });
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}/api/terminal?sessionId=${encodeURIComponent(sessionId)}&token=${encodeURIComponent(token)}`;
@@ -180,6 +219,8 @@ export default function Terminal({ sessionId, fullscreen, onConnectionChange }: 
           })
         );
       }
+      // Defer to next frame so layout has settled after fit
+      requestAnimationFrame(() => publishScroll());
     };
 
     const resizeObserver = new ResizeObserver(handleResize);
@@ -190,6 +231,9 @@ export default function Terminal({ sessionId, fullscreen, onConnectionChange }: 
     const containerEl = terminalRef.current;
     return () => {
       containerEl?.removeEventListener("paste", handlePaste, true);
+      scrollDisposable.dispose();
+      writeDisposable.dispose();
+      registerScrollFnRef.current(null);
       resizeObserver.disconnect();
       ws.close();
       term.dispose();
@@ -215,7 +259,6 @@ export default function Terminal({ sessionId, fullscreen, onConnectionChange }: 
     <div
       ref={terminalRef}
       className="w-full h-full min-h-0"
-      style={{ padding: "4px" }}
     />
   );
 }

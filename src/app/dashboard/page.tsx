@@ -22,6 +22,7 @@ import { useTheme } from "@/lib/ThemeContext";
 import { themeConfigs } from "@/lib/theme-config";
 import ChatPanel from "@/components/chat/ChatPanel";
 import ImageLightbox from "@/components/chat/ImageLightbox";
+import { TerminalScrollProvider } from "@/lib/TerminalScrollContext";
 
 const Terminal = dynamic(() => import("@/components/Terminal"), {
   ssr: false,
@@ -300,14 +301,14 @@ function DashboardInner() {
             viewMode === "files" ? (
               /* File Manager */
               <div className="absolute inset-0 m-1 md:m-2">
-                <div className="w-full h-full rounded-xl border border-border bg-surface-alt overflow-hidden">
+                <div className="w-full h-full rounded-xl border border-accent/20 bg-surface-alt overflow-hidden">
                   <FileManager sessionId={activeSessionId} />
                 </div>
               </div>
             ) : isActiveSessionStopped ? (
               /* Stopped session overlay */
               <div className="absolute inset-0 m-1 md:m-2">
-                <div className="w-full h-full rounded-xl border border-border bg-surface-alt overflow-hidden">
+                <div className="w-full h-full rounded-xl border border-accent/20 bg-surface-alt overflow-hidden">
                   <StoppedSessionOverlay
                     sessionName={activeSessionName || activeSessionId}
                     onResume={handleResumeSession}
@@ -317,33 +318,38 @@ function DashboardInner() {
               </div>
             ) : (
               /* Terminal — presence system lives here ONLY */
-              <div
-                ref={contentRef}
-                className={`absolute inset-0 ${fullscreen ? "m-0" : "m-1 md:m-2"} presence-active`}
-              >
-                <CursorOverlay />
-                {/* Fullscreen toggle */}
-                <button
-                  onClick={() => setFullscreen(!fullscreen)}
-                  className="absolute top-2 right-2 z-10 p-2 md:p-1.5 text-muted hover:text-foreground transition-colors bg-surface-alt/80 rounded-md backdrop-blur-sm"
-                  title={fullscreen ? "Выйти из полноэкранного" : "Полноэкранный режим"}
+              <TerminalScrollProvider>
+                <div
+                  ref={contentRef}
+                  className={`absolute inset-0 ${fullscreen ? "m-0" : "m-1 md:m-2"} presence-active`}
                 >
-                  {fullscreen ? (
-                    <Minimize className="w-5 h-5 md:w-4 md:h-4" />
-                  ) : (
-                    <Maximize className="w-5 h-5 md:w-4 md:h-4" />
-                  )}
-                </button>
+                  <CursorOverlay />
+                  {/* Fullscreen toggle */}
+                  <button
+                    onClick={() => setFullscreen(!fullscreen)}
+                    className="absolute top-2 right-2 z-10 p-2 md:p-1.5 text-muted hover:text-foreground transition-colors bg-surface-alt/80 rounded-md backdrop-blur-sm"
+                    title={fullscreen ? "Выйти из полноэкранного" : "Полноэкранный режим"}
+                  >
+                    {fullscreen ? (
+                      <Minimize className="w-5 h-5 md:w-4 md:h-4" />
+                    ) : (
+                      <Maximize className="w-5 h-5 md:w-4 md:h-4" />
+                    )}
+                  </button>
 
-                <div className="w-full h-full rounded-xl border border-border bg-surface-alt overflow-hidden">
-                  <Terminal
-                    key={terminalKey}
-                    sessionId={activeSessionId}
-                    fullscreen={fullscreen}
-                    onConnectionChange={handleConnectionChange}
-                  />
+                  <div
+                    className="w-full h-full rounded-xl border border-accent/20 overflow-hidden"
+                    style={{ backgroundColor: themeConfigs[theme].terminal.background }}
+                  >
+                    <Terminal
+                      key={terminalKey}
+                      sessionId={activeSessionId}
+                      fullscreen={fullscreen}
+                      onConnectionChange={handleConnectionChange}
+                    />
+                  </div>
                 </div>
-              </div>
+              </TerminalScrollProvider>
             )
           ) : (
             <div className="flex items-center justify-center h-full relative overflow-hidden px-4">

@@ -34,12 +34,12 @@ class PresenceManager {
     this._broadcastSessionPeers();
   }
 
-  handleCursor(peerId, x, y) {
+  handleCursor(peerId, cursorData) {
     const peer = this.peers.get(peerId);
     if (!peer || !peer.sessionId) return;
-    // Include name + colorIndex so receiver can create peer entry if missing
     const msg = JSON.stringify({
-      type: "cursor", peerId, x, y,
+      type: "cursor", peerId,
+      x: cursorData.x, yBot: cursorData.yBot, vh: cursorData.vh,
       name: peer.name, colorIndex: peer.colorIndex,
     });
     for (const [id, p] of this.peers) {

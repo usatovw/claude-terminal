@@ -1,14 +1,21 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { AnimatePresence } from "motion/react";
 import { usePresence } from "./PresenceProvider";
+import { useTerminalScroll } from "@/lib/TerminalScrollContext";
 import Cursor from "./Cursor";
+import EdgeIndicator from "./EdgeIndicator";
 
 export default function CursorOverlay() {
   const {
     peers, chatMessages, myColorIndex, myName,
     sendCursor, sendChat, sendChatClose,
   } = usePresence();
+  const { scroll, scrollToLine } = useTerminalScroll();
+  const scrollRef = useRef(scroll);
+  scrollRef.current = scroll;
+
   const [isMobile, setIsMobile] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatValue, setChatValue] = useState("");
@@ -24,7 +31,7 @@ export default function CursorOverlay() {
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  // Mouse tracking
+  // Mouse tracking — sends absolute line-based Y position
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       const overlay = document.getElementById("presence-overlay");
@@ -38,7 +45,13 @@ export default function CursorOverlay() {
       const yPct = ((e.clientY - rect.top) / rect.height) * 100;
       setCursorPos({ x: xPct, y: yPct });
       setShowSelfCursor(true);
-      sendCursor(xPct, yPct);
+
+      // Compute distance from bottom of buffer in line units
+      // Bottom-relative positioning stays synced even when clients have different buffer sizes
+      const s = scrollRef.current;
+      if (s.rows <= 0 || s.totalLines <= 0) return; // scroll context not ready
+      const yBot = s.totalLines - (s.viewportY + (yPct / 100 * s.rows));
+      sendCursor(xPct, yBot, s.rows);
     };
     const handleMouseLeave = () => setShowSelfCursor(false);
     document.addEventListener("mousemove", handleMouseMove);
@@ -110,13 +123,38 @@ export default function CursorOverlay() {
     if (chatValue.trim()) {
       sendChat(chatValue.trim());
     }
-    // Close local input but don't send chat_close — let message stay visible for others
     setChatOpen(false);
     setChatValue("");
     clearInactivityTimer();
   }, [chatValue, sendChat, clearInactivityTimer]);
 
   const remotePeers = Array.from(peers.values()).filter((p) => p.cursor);
+
+  // Classify remote cursors: in-viewport vs off-screen
+  const inViewport: typeof remotePeers = [];
+  const edgeUp: typeof remotePeers = [];
+  const edgeDown: typeof remotePeers = [];
+
+  for (const peer of remotePeers) {
+    const cursor = peer.cursor!;
+    if (scroll.rows <= 0) {
+      // Scroll context not ready — show all in viewport as fallback
+      inViewport.push(peer);
+      continue;
+    }
+    // Convert bottom-relative position to local line, then to viewport %
+    // cursorLine = totalLines - yBot (local absolute line)
+    // displayYPct = (cursorLine - viewportY) / rows * 100
+    const cursorLine = scroll.totalLines - cursor.yBot;
+    const displayYPct = ((cursorLine - scroll.viewportY) / scroll.rows) * 100;
+    if (displayYPct < -5) {
+      edgeUp.push(peer);
+    } else if (displayYPct > 105) {
+      edgeDown.push(peer);
+    } else {
+      inViewport.push(peer);
+    }
+  }
 
   return (
     <div
@@ -146,14 +184,19 @@ export default function CursorOverlay() {
         onChatSubmit={handleChatSubmit}
       />
 
-      {/* Remote cursors */}
-      {remotePeers.map((peer) => {
+      {/* Remote cursors — in viewport */}
+      {inViewport.map((peer) => {
+        const cursor = peer.cursor!;
+        const cursorLine = scroll.totalLines - cursor.yBot;
+        const displayYPct = scroll.rows > 0
+          ? ((cursorLine - scroll.viewportY) / scroll.rows) * 100
+          : 50;
         const chatMsg = chatMessages.get(peer.peerId);
         return (
           <Cursor
             key={peer.peerId}
-            x={peer.cursor!.x}
-            y={peer.cursor!.y}
+            x={cursor.x}
+            y={displayYPct}
             colorIndex={peer.colorIndex}
             name={peer.name}
             isLocal={false}
@@ -164,6 +207,32 @@ export default function CursorOverlay() {
           />
         );
       })}
+
+      {/* Edge indicators — off-screen cursors */}
+      <AnimatePresence>
+        {edgeUp.map((peer, i) => (
+          <EdgeIndicator
+            key={`edge-up-${peer.peerId}`}
+            name={peer.name}
+            colorIndex={peer.colorIndex}
+            direction="up"
+            xPct={peer.cursor!.x}
+            stackIndex={i}
+            onClick={() => scrollToLine(Math.round(scroll.totalLines - peer.cursor!.yBot))}
+          />
+        ))}
+        {edgeDown.map((peer, i) => (
+          <EdgeIndicator
+            key={`edge-down-${peer.peerId}`}
+            name={peer.name}
+            colorIndex={peer.colorIndex}
+            direction="down"
+            xPct={peer.cursor!.x}
+            stackIndex={i}
+            onClick={() => scrollToLine(Math.round(scroll.totalLines - peer.cursor!.yBot))}
+          />
+        ))}
+      </AnimatePresence>
     </div>
   );
 }

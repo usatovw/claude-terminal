@@ -1,8 +1,15 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { PRESENCE_COLORS } from "@/lib/presence-colors";
+
+// Shared bubble constraints
+const BUBBLE_MAX_W = 300;
+const BUBBLE_CONTENT_W = 280; // BUBBLE_MAX_W minus px-2.5 padding (10px * 2)
+const BUBBLE_MAX_LINES = 2;
+const BUBBLE_LINE_H = 16; // text-xs line-height = 1rem = 16px
+const BUBBLE_MAX_H = BUBBLE_MAX_LINES * BUBBLE_LINE_H;
 
 interface CursorProps {
   x: number;
@@ -24,7 +31,8 @@ export default function Cursor({
   chatActive, chatText,
   isMobile, onChatChange, onChatClose, onChatSubmit,
 }: CursorProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement | HTMLInputElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
   const color = PRESENCE_COLORS[colorIndex % PRESENCE_COLORS.length];
   const [fadeOpacity, setFadeOpacity] = useState(1);
 
@@ -43,9 +51,17 @@ export default function Cursor({
     }
   }, [chatActive, isLocal]);
 
+  // Check if text fits within 2 lines at max width
+  const checkFits = useCallback((text: string): boolean => {
+    const el = measureRef.current;
+    if (!el) return true;
+    el.textContent = text || "\u200B";
+    return el.scrollHeight <= BUBBLE_MAX_H;
+  }, []);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") onChatClose?.();
-    if (e.key === "Enter") onChatSubmit?.();
+    if (e.key === "Enter") { e.preventDefault(); onChatSubmit?.(); }
   };
 
   // --- Mobile local: fixed-bottom chat input ---
@@ -71,14 +87,13 @@ export default function Cursor({
               }}
             >
               <input
-                ref={inputRef}
+                ref={inputRef as React.RefObject<HTMLInputElement>}
                 type="text"
                 value={chatText}
                 maxLength={128}
                 onChange={(e) => onChatChange?.(e.target.value.slice(0, 128))}
                 onKeyDown={handleKeyDown}
                 onBlur={onChatClose}
-                placeholder="Сообщение..."
                 className="bg-transparent text-sm text-zinc-200 outline-none w-full px-3 py-2"
               />
             </div>
@@ -114,6 +129,16 @@ export default function Cursor({
 
   const svgOpacity = isLocal ? (visible ? 1 : 0) : fadeOpacity;
 
+  // Shared bubble content styles (identical for author & observer)
+  const bubbleContentStyle = {
+    maxWidth: BUBBLE_MAX_W,
+    wordBreak: "break-word" as const,
+    display: "-webkit-box" as const,
+    WebkitLineClamp: BUBBLE_MAX_LINES,
+    WebkitBoxOrient: "vertical" as const,
+    overflow: "hidden" as const,
+  };
+
   return (
     <div
       className="absolute"
@@ -123,6 +148,26 @@ export default function Cursor({
         transition: isLocal ? undefined : "left 80ms linear, top 80ms linear",
       }}
     >
+      {/* Hidden measurement div — checks if text fits in 2 lines */}
+      {isLocal && (
+        <div
+          ref={measureRef}
+          aria-hidden
+          className="text-xs"
+          style={{
+            position: "fixed",
+            left: -9999,
+            top: -9999,
+            visibility: "hidden",
+            width: BUBBLE_CONTENT_W,
+            height: BUBBLE_MAX_H,
+            overflow: "hidden",
+            wordBreak: "break-word",
+            lineHeight: BUBBLE_LINE_H + "px",
+          }}
+        />
+      )}
+
       {/* Auto-layout: cursor → bubble → tag */}
       <div className="flex flex-col items-start">
         {/* 1. Cursor SVG */}
@@ -166,29 +211,43 @@ export default function Cursor({
                 }}
               >
                 {isLocal ? (
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={chatText}
-                    maxLength={128}
-                    onChange={(e) => onChatChange?.(e.target.value.slice(0, 128))}
-                    onKeyDown={handleKeyDown}
-                    onBlur={onChatClose}
-                    placeholder="Сообщение..."
-                    className="bg-transparent text-xs text-zinc-200 outline-none w-56 px-2.5 py-1.5 pointer-events-auto"
-                  />
+                  <div className="inline-grid px-2.5 py-1.5" style={{ maxWidth: BUBBLE_MAX_W }}>
+                    {/* Hidden span — determines grid cell size (hug width) */}
+                    <span
+                      className="invisible text-xs"
+                      style={{ gridArea: "1/1", ...bubbleContentStyle }}
+                    >
+                      {chatText || "\u200B"}
+                    </span>
+                    {/* Textarea — fills grid cell exactly */}
+                    <textarea
+                      ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+                      value={chatText}
+                      rows={1}
+                      cols={1}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\n/g, "");
+                        if (!checkFits(val)) return;
+                        onChatChange?.(val);
+                      }}
+                      onKeyDown={handleKeyDown}
+                      onBlur={onChatClose}
+                      className="bg-transparent text-xs text-zinc-200 outline-none pointer-events-auto resize-none"
+                      style={{
+                        gridArea: "1/1",
+                        width: "100%",
+                        height: "100%",
+                        minWidth: 0,
+                        minHeight: 0,
+                        overflow: "hidden",
+                        wordBreak: "break-word",
+                      }}
+                    />
+                  </div>
                 ) : (
                   <div
                     className="text-xs px-2.5 py-1.5"
-                    style={{
-                      color: color.cursor,
-                      maxWidth: "64ch",
-                      wordBreak: "break-word",
-                      display: "-webkit-box",
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: "vertical",
-                      overflow: "hidden",
-                    }}
+                    style={{ color: color.cursor, ...bubbleContentStyle }}
                   >
                     {chatText}
                   </div>

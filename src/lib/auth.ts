@@ -2,26 +2,53 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET!;
-const PASSWORD_HASH = process.env.PASSWORD_HASH!;
 const SESSION_TIMEOUT = parseInt(process.env.SESSION_TIMEOUT_HOURS || "24", 10);
 
-export async function verifyPassword(password: string): Promise<boolean> {
-  return bcrypt.compare(password, PASSWORD_HASH);
+export interface JwtPayload {
+  userId: number;
+  login: string;
+  firstName: string;
+  lastName: string;
+  role: "admin" | "user" | "guest";
 }
 
-export function createToken(): string {
+export interface DbUser {
+  id: number;
+  login: string;
+  password_hash: string;
+  first_name: string;
+  last_name: string;
+  role: "admin" | "user" | "guest";
+  status: "pending" | "approved" | "rejected";
+  color_index: number;
+  created_at: string;
+}
+
+export async function verifyUserPassword(
+  user: DbUser,
+  password: string
+): Promise<boolean> {
+  return bcrypt.compare(password, user.password_hash);
+}
+
+export function createToken(payload: JwtPayload): string {
   return jwt.sign(
-    { role: "admin", iat: Math.floor(Date.now() / 1000) },
+    { ...payload, iat: Math.floor(Date.now() / 1000) },
     JWT_SECRET,
     { expiresIn: `${SESSION_TIMEOUT}h` }
   );
 }
 
-export function verifyToken(token: string): boolean {
+export function verifyToken(token: string): JwtPayload | null {
   try {
-    jwt.verify(token, JWT_SECRET);
-    return true;
+    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
+    return decoded;
   } catch {
-    return false;
+    return null;
   }
+}
+
+/** Backward-compatible boolean check */
+export function isTokenValid(token: string): boolean {
+  return verifyToken(token) !== null;
 }

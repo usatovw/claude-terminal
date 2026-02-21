@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import { generateName } from "@/lib/presence-names";
+import { useUser } from "@/lib/UserContext";
 
 interface Peer {
   peerId: string;
@@ -17,6 +18,28 @@ export interface ChatMessage {
   timestamp: number;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export interface GlobalChatMessage {
+  id: number;
+  text: string;
+  createdAt: string;
+  user: {
+    id: number;
+    login: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+    colorIndex: number;
+  };
+  attachments: Array<{
+    id: number;
+    filePath: string;
+    originalName: string;
+    mimeType: string;
+    size: number;
+  }>;
+}
+
 interface PresenceContextValue {
   myPeerId: string;
   myName: string;
@@ -24,6 +47,7 @@ interface PresenceContextValue {
   peers: Map<string, Peer>;
   chatMessages: Map<string, ChatMessage>;
   sessionPeers: Record<string, Peer[]>;
+  globalChatMessages: GlobalChatMessage[];
   sendCursor: (x: number, y: number) => void;
   sendChat: (text: string) => void;
   sendChatClose: () => void;
@@ -44,17 +68,32 @@ function generatePeerId() {
 }
 
 export default function PresenceProvider({ children }: { children: React.ReactNode }) {
+  const { user, loading: userLoading } = useUser();
   const peerIdRef = useRef(generatePeerId());
-  const nameRef = useRef(generateName());
+  const nameRef = useRef("");
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentSessionRef = useRef<string | null>(null);
   const lastCursorSendRef = useRef(0);
 
+  // Set name from user context: real name for registered users, random for guests
+  useEffect(() => {
+    if (userLoading) return;
+    if (user && user.role !== "guest") {
+      nameRef.current = [user.firstName, user.lastName].filter(Boolean).join(" ");
+    } else if (user && user.role === "guest") {
+      // Guest firstName already contains a random Russian name
+      nameRef.current = user.firstName;
+    } else {
+      nameRef.current = generateName();
+    }
+  }, [user, userLoading]);
+
   const [myColorIndex, setMyColorIndex] = useState(0);
   const [peers, setPeers] = useState<Map<string, Peer>>(new Map());
   const [chatMessages, setChatMessages] = useState<Map<string, ChatMessage>>(new Map());
   const [sessionPeers, setSessionPeers] = useState<Record<string, Peer[]>>({});
+  const [globalChatMessages, setGlobalChatMessages] = useState<GlobalChatMessage[]>([]);
   const [connected, setConnected] = useState(false);
 
   const connect = useCallback(async () => {
@@ -159,6 +198,13 @@ export default function PresenceProvider({ children }: { children: React.ReactNo
               });
               break;
 
+            case "chat_message":
+              // Global persistent chat message from server
+              if (msg.message) {
+                setGlobalChatMessages((prev) => [...prev, msg.message]);
+              }
+              break;
+
             case "session_peers":
               setSessionPeers(msg.sessions);
               break;
@@ -181,12 +227,13 @@ export default function PresenceProvider({ children }: { children: React.ReactNo
   }, []);
 
   useEffect(() => {
+    if (userLoading) return;
     connect();
     return () => {
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       wsRef.current?.close();
     };
-  }, [connect]);
+  }, [connect, userLoading]);
 
   const joinSession = useCallback((sessionId: string) => {
     currentSessionRef.current = sessionId;
@@ -225,6 +272,7 @@ export default function PresenceProvider({ children }: { children: React.ReactNo
         peers,
         chatMessages,
         sessionPeers,
+        globalChatMessages,
         sendCursor,
         sendChat,
         sendChatClose,

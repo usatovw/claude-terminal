@@ -7,7 +7,7 @@ import archiver from "archiver";
 
 function authCheck(request: NextRequest): boolean {
   const token = request.cookies.get("auth-token")?.value;
-  return !!token && verifyToken(token);
+  return !!token && !!verifyToken(token);
 }
 
 export async function POST(

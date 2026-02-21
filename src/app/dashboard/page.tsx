@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import Navbar, { ViewMode } from "@/components/Navbar";
 import SessionList from "@/components/SessionList";
@@ -16,6 +17,9 @@ import { HoverBorderGradient } from "@/components/ui/hover-border-gradient";
 import { Maximize, Minimize, X } from "@/components/Icons";
 import PresenceProvider, { usePresence } from "@/components/presence/PresenceProvider";
 import CursorOverlay from "@/components/presence/CursorOverlay";
+import { UserProvider } from "@/lib/UserContext";
+import ChatPanel from "@/components/chat/ChatPanel";
+import ImageLightbox from "@/components/chat/ImageLightbox";
 
 const Terminal = dynamic(() => import("@/components/Terminal"), {
   ssr: false,
@@ -28,13 +32,16 @@ const Terminal = dynamic(() => import("@/components/Terminal"), {
 
 export default function Dashboard() {
   return (
-    <PresenceProvider>
-      <DashboardInner />
-    </PresenceProvider>
+    <UserProvider>
+      <PresenceProvider>
+        <DashboardInner />
+      </PresenceProvider>
+    </UserProvider>
   );
 }
 
 function DashboardInner() {
+  const router = useRouter();
   const { joinSession: presenceJoin } = usePresence();
   const contentRef = useRef<HTMLDivElement>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -49,6 +56,8 @@ function DashboardInner() {
   const [viewMode, setViewMode] = useState<ViewMode>("terminal");
   const [resumingSessionId, setResumingSessionId] = useState<string | null>(null);
   const [creatingSession, setCreatingSession] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   const sessionCount = {
     total: sessions.length,
@@ -105,6 +114,11 @@ function DashboardInner() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [fullscreen]);
+
+  const handleLogout = useCallback(async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/");
+  }, [router]);
 
   const handleSelectSession = useCallback((sessionId: string) => {
     setActiveSessionId(sessionId);
@@ -203,6 +217,7 @@ function DashboardInner() {
             onResumeSession={handleResumeSession}
             resumingSessionId={resumingSessionId}
             creatingSession={creatingSession}
+            onLogout={handleLogout}
           />
         </div>
       )}
@@ -245,6 +260,7 @@ function DashboardInner() {
                 onOpenFiles={handleOpenFiles}
                 onResumeSession={handleResumeSession}
                 resumingSessionId={resumingSessionId}
+                onLogout={handleLogout}
               />
             </motion.div>
           </>
@@ -264,9 +280,8 @@ function DashboardInner() {
             onMenuClick={() => setMobileSidebarOpen(true)}
             viewMode={viewMode}
             onSwitchView={handleSwitchView}
-            onChatOpen={() => {
-              document.dispatchEvent(new CustomEvent("presence-chat-open"));
-            }}
+            chatOpen={chatOpen}
+            onToggleChat={() => setChatOpen(!chatOpen)}
           />
         )}
 
@@ -388,8 +403,54 @@ function DashboardInner() {
               </div>
             </div>
           )}
+
+          {/* Chat panel — right overlay */}
+          <AnimatePresence>
+            {chatOpen && (
+              <>
+                {/* Mobile backdrop */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="fixed inset-0 bg-black/60 z-40 md:hidden"
+                  onClick={() => setChatOpen(false)}
+                />
+                {/* Panel */}
+                <motion.div
+                  initial={{ x: "100%" }}
+                  animate={{ x: 0 }}
+                  exit={{ x: "100%" }}
+                  transition={{ type: "spring", damping: 30, stiffness: 300 }}
+                  className="fixed md:absolute top-0 right-0 bottom-0 w-full sm:w-80 md:w-96 z-50 md:z-20 bg-zinc-950 border-l border-zinc-800/30"
+                >
+                  {/* Close button — mobile */}
+                  <div className="absolute top-2 right-2 z-10 md:hidden">
+                    <button
+                      onClick={() => setChatOpen(false)}
+                      className="p-2 text-zinc-400 hover:text-zinc-200 transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <ChatPanel
+                    onImageClick={(src) => setLightboxSrc(src)}
+                  />
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
         </div>
       </div>
+
+      {/* Image lightbox */}
+      {lightboxSrc && (
+        <ImageLightbox
+          src={lightboxSrc}
+          onClose={() => setLightboxSrc(null)}
+        />
+      )}
     </div>
   );
 }

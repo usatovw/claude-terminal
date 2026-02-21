@@ -8,7 +8,13 @@ interface Peer {
   name: string;
   colorIndex: number;
   cursor?: { x: number; y: number; timestamp: number };
-  chat?: string | null;
+}
+
+export interface ChatMessage {
+  peerId: string;
+  text: string;
+  colorIndex: number;
+  timestamp: number;
 }
 
 interface PresenceContextValue {
@@ -16,6 +22,7 @@ interface PresenceContextValue {
   myName: string;
   myColorIndex: number;
   peers: Map<string, Peer>;
+  chatMessages: Map<string, ChatMessage>;
   sessionPeers: Record<string, Peer[]>;
   sendCursor: (x: number, y: number) => void;
   sendChat: (text: string) => void;
@@ -46,6 +53,7 @@ export default function PresenceProvider({ children }: { children: React.ReactNo
 
   const [myColorIndex, setMyColorIndex] = useState(0);
   const [peers, setPeers] = useState<Map<string, Peer>>(new Map());
+  const [chatMessages, setChatMessages] = useState<Map<string, ChatMessage>>(new Map());
   const [sessionPeers, setSessionPeers] = useState<Record<string, Peer[]>>({});
   const [connected, setConnected] = useState(false);
 
@@ -62,7 +70,6 @@ export default function PresenceProvider({ children }: { children: React.ReactNo
 
       ws.onopen = () => {
         setConnected(true);
-        // Rejoin session if we had one
         if (currentSessionRef.current) {
           ws.send(JSON.stringify({ type: "join", sessionId: currentSessionRef.current }));
         }
@@ -79,16 +86,15 @@ export default function PresenceProvider({ children }: { children: React.ReactNo
             case "peers":
               setPeers((prev) => {
                 const next = new Map(prev);
-                // Remove peers no longer in session
                 const peerIds = new Set(msg.peers.map((p: Peer) => p.peerId));
                 for (const id of next.keys()) {
                   if (!peerIds.has(id)) next.delete(id);
                 }
-                // Update/add peers
                 for (const p of msg.peers) {
-                  if (p.peerId === peerIdRef.current) continue; // skip self
+                  if (p.peerId === peerIdRef.current) continue;
                   const existing = next.get(p.peerId);
-                  next.set(p.peerId, { ...p, cursor: existing?.cursor, chat: existing?.chat });
+                  // Preserve cursor data, but do NOT touch chat — it's in a separate map
+                  next.set(p.peerId, { ...p, cursor: existing?.cursor });
                 }
                 return next;
               });
@@ -96,36 +102,43 @@ export default function PresenceProvider({ children }: { children: React.ReactNo
 
             case "cursor":
               setPeers((prev) => {
-                const peer = prev.get(msg.peerId);
-                if (!peer) return prev;
                 const next = new Map(prev);
-                next.set(msg.peerId, { ...peer, cursor: { x: msg.x, y: msg.y, timestamp: Date.now() } });
+                const existing = next.get(msg.peerId);
+                const base = existing || { peerId: msg.peerId, name: msg.name, colorIndex: msg.colorIndex };
+                next.set(msg.peerId, { ...base, cursor: { x: msg.x, y: msg.y, timestamp: Date.now() } });
                 return next;
               });
               break;
 
             case "chat":
-              setPeers((prev) => {
-                const peer = prev.get(msg.peerId);
-                if (!peer) return prev;
+              setChatMessages((prev) => {
                 const next = new Map(prev);
-                next.set(msg.peerId, { ...peer, chat: msg.text });
+                next.set(msg.peerId, {
+                  peerId: msg.peerId,
+                  text: msg.text,
+                  colorIndex: msg.colorIndex,
+                  timestamp: Date.now(),
+                });
                 return next;
               });
               break;
 
             case "chat_close":
-              setPeers((prev) => {
-                const peer = prev.get(msg.peerId);
-                if (!peer) return prev;
+              setChatMessages((prev) => {
                 const next = new Map(prev);
-                next.set(msg.peerId, { ...peer, chat: null });
+                next.delete(msg.peerId);
                 return next;
               });
               break;
 
             case "peer_left":
               setPeers((prev) => {
+                const next = new Map(prev);
+                next.delete(msg.peerId);
+                return next;
+              });
+              setChatMessages((prev) => {
+                if (!prev.has(msg.peerId)) return prev;
                 const next = new Map(prev);
                 next.delete(msg.peerId);
                 return next;
@@ -142,13 +155,11 @@ export default function PresenceProvider({ children }: { children: React.ReactNo
       ws.onclose = () => {
         setConnected(false);
         wsRef.current = null;
-        // Reconnect after 3 seconds
         reconnectTimerRef.current = setTimeout(() => {
           connect();
         }, 3000);
       };
     } catch {
-      // Retry connection
       reconnectTimerRef.current = setTimeout(() => {
         connect();
       }, 3000);
@@ -172,7 +183,7 @@ export default function PresenceProvider({ children }: { children: React.ReactNo
 
   const sendCursor = useCallback((x: number, y: number) => {
     const now = Date.now();
-    if (now - lastCursorSendRef.current < 50) return; // throttle 50ms
+    if (now - lastCursorSendRef.current < 50) return;
     lastCursorSendRef.current = now;
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: "cursor", x, y }));
@@ -198,6 +209,7 @@ export default function PresenceProvider({ children }: { children: React.ReactNo
         myName: nameRef.current,
         myColorIndex,
         peers,
+        chatMessages,
         sessionPeers,
         sendCursor,
         sendChat,

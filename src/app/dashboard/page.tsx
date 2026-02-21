@@ -35,7 +35,7 @@ export default function Dashboard() {
 }
 
 function DashboardInner() {
-  const { joinSession: presenceJoin, sendCursor } = usePresence();
+  const { joinSession: presenceJoin } = usePresence();
   const contentRef = useRef<HTMLDivElement>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [terminalKey, setTerminalKey] = useState(0);
@@ -185,22 +185,6 @@ function DashboardInner() {
     }
   }, [activeSessionId]);
 
-  const handleContentMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!contentRef.current) return;
-    const rect = contentRef.current.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
-    sendCursor(x, y);
-  }, [sendCursor]);
-
-  const handleContentTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!contentRef.current || !e.touches[0]) return;
-    const rect = contentRef.current.getBoundingClientRect();
-    const x = ((e.touches[0].clientX - rect.left) / rect.width) * 100;
-    const y = ((e.touches[0].clientY - rect.top) / rect.height) * 100;
-    sendCursor(x, y);
-  }, [sendCursor]);
-
   return (
     <div className="flex h-screen bg-black">
       {/* Desktop sidebar */}
@@ -287,13 +271,7 @@ function DashboardInner() {
         )}
 
         {/* Content area */}
-        <div
-          ref={contentRef}
-          className="flex-1 relative"
-          onMouseMove={handleContentMouseMove}
-          onTouchMove={handleContentTouchMove}
-        >
-          <CursorOverlay />
+        <div className="flex-1 relative">
           {activeSessionId ? (
             viewMode === "files" ? (
               /* File Manager */
@@ -328,12 +306,16 @@ function DashboardInner() {
                 </MovingBorderButton>
               </div>
             ) : (
-              /* Terminal */
-              <div className={`absolute inset-0 ${fullscreen ? "m-0" : "m-1 md:m-2"}`}>
+              /* Terminal — presence system lives here ONLY */
+              <div
+                ref={contentRef}
+                className={`absolute inset-0 ${fullscreen ? "m-0" : "m-1 md:m-2"} presence-active`}
+              >
+                <CursorOverlay />
                 {/* Fullscreen toggle */}
                 <button
                   onClick={() => setFullscreen(!fullscreen)}
-                  className="absolute top-2 right-2 z-10 p-2 md:p-1.5 text-zinc-600 hover:text-zinc-300 transition-colors bg-zinc-900/80 rounded-md backdrop-blur-sm cursor-pointer"
+                  className="absolute top-2 right-2 z-10 p-2 md:p-1.5 text-zinc-600 hover:text-zinc-300 transition-colors bg-zinc-900/80 rounded-md backdrop-blur-sm"
                   title={fullscreen ? "Выйти из полноэкранного" : "Полноэкранный режим"}
                 >
                   {fullscreen ? (

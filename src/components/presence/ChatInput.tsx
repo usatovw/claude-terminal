@@ -20,7 +20,6 @@ export default function ChatInput({ cursorX, cursorY, colorIndex, isMobile, onCl
   const color = PRESENCE_COLORS[colorIndex % PRESENCE_COLORS.length];
 
   useEffect(() => {
-    // Focus input on mount
     requestAnimationFrame(() => {
       inputRef.current?.focus();
     });
@@ -37,6 +36,10 @@ export default function ChatInput({ cursorX, cursorY, colorIndex, isMobile, onCl
     }
   };
 
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setValue(e.target.value.slice(0, 128));
+  };
+
   if (isMobile) {
     return (
       <motion.div
@@ -47,17 +50,19 @@ export default function ChatInput({ cursorX, cursorY, colorIndex, isMobile, onCl
         className="fixed bottom-4 left-4 right-4 z-25 pointer-events-auto"
       >
         <div
-          className="rounded-lg shadow-xl p-1 border"
+          className="rounded-lg p-1 border backdrop-blur-xl"
           style={{
-            backgroundColor: "#18181b",
-            borderColor: color.cursor + "40",
+            backgroundColor: "rgba(9, 9, 11, 0.85)",
+            borderColor: color.cursor + "50",
+            boxShadow: `0 0 15px ${color.cursor}20, 0 8px 16px rgba(0,0,0,0.4)`,
           }}
         >
           <input
             ref={inputRef}
             type="text"
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            maxLength={128}
+            onChange={handleChange}
             onKeyDown={handleKeyDown}
             onBlur={onClose}
             placeholder="Сообщение..."
@@ -82,21 +87,23 @@ export default function ChatInput({ cursorX, cursorY, colorIndex, isMobile, onCl
       style={{ left: `${clampedX}%`, top: `${clampedY}%` }}
     >
       <div
-        className="rounded-lg shadow-xl p-1 border"
+        className="rounded-lg p-1 border backdrop-blur-xl"
         style={{
-          backgroundColor: "#18181b",
-          borderColor: color.cursor + "40",
+          backgroundColor: "rgba(9, 9, 11, 0.85)",
+          borderColor: color.cursor + "50",
+          boxShadow: `0 0 15px ${color.cursor}20, 0 8px 16px rgba(0,0,0,0.4)`,
         }}
       >
         <input
           ref={inputRef}
           type="text"
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          maxLength={128}
+          onChange={handleChange}
           onKeyDown={handleKeyDown}
           onBlur={onClose}
           placeholder="Сообщение..."
-          className="bg-transparent text-sm text-zinc-200 outline-none w-48 px-2 py-1"
+          className="bg-transparent text-sm text-zinc-200 outline-none w-64 px-2 py-1"
         />
       </div>
     </motion.div>

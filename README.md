@@ -10,6 +10,7 @@ Self-hosted web interface for [Claude Code CLI](https://docs.anthropic.com/en/do
 - **Multi-session** — create, stop, resume, rename, delete sessions with loading states
 - **File manager** — browse, download, rename, delete files in session directories; recursive search; bulk zip-download; resizable columns
 - **Stopped session overlay** — decorative terminal-style background with one-click resume
+- **Presence** — Figma-like cursors, live chat bubbles, session avatars via WebSocket
 - **Image paste** — Ctrl+V images from clipboard directly into Claude CLI (via X11 bridge)
 - **Mobile-first** — adaptive layout throughout: sidebar drawer, touch-friendly targets, hidden columns on small screens
 - **Auth** — password login with bcrypt, JWT, rate limiting
@@ -194,12 +195,20 @@ Browser (xterm.js) <--WebSocket--> server.js <--node-pty--> Claude CLI
 │   │   ├── FileManager.tsx      # File browser with search, sort, bulk ops
 │   │   ├── StoppedSessionOverlay.tsx  # Resume screen for stopped sessions
 │   │   ├── file-manager/        # FileItem, FileList, FileTableHeader, etc.
+│   │   ├── presence/            # Figma-like presence system
+│   │   │   ├── PresenceProvider.tsx  # WebSocket connection, state management
+│   │   │   ├── CursorOverlay.tsx    # Overlay layer, mouse tracking, chat logic
+│   │   │   ├── Cursor.tsx           # Unified cursor + chat bubble + name tag
+│   │   │   ├── PresenceAvatars.tsx  # Session peer avatars in navbar
+│   │   │   └── UserAvatar.tsx       # Single avatar component
 │   │   └── ui/                  # Aceternity UI components
 │   └── lib/
 │       ├── auth.ts              # JWT + bcrypt helpers
 │       ├── files.ts             # Path sanitization for file API
 │       ├── utils.ts             # formatFileSize, relativeTime
-│       └── useIsMobile.ts       # Responsive breakpoint hook
+│       ├── useIsMobile.ts       # Responsive breakpoint hook
+│       ├── presence-colors.ts   # 12-color palette for presence
+│       └── presence-names.ts    # Random name generator for peers
 ```
 
 See [CLAUDE.md](CLAUDE.md) for detailed architecture documentation.

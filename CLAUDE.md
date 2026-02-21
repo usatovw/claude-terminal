@@ -10,6 +10,9 @@ Self-hosted web interface for Claude Code CLI. Single-user (password auth), mult
 Browser (xterm.js) ←→ WebSocket ←→ server.js ←→ node-pty ←→ Claude CLI
                                        ↑
                                   Next.js API routes (auth, sessions)
+
+Browser (presence) ←→ WebSocket ←→ server.js ←→ PresenceManager
+                                  /api/presence    (cursor, chat, peers)
 ```
 
 **server.js** — Custom HTTP server. Handles Next.js pages + WebSocket upgrades for terminal connections. JWT validation on WS upgrade.
@@ -35,6 +38,12 @@ Browser (xterm.js) ←→ WebSocket ←→ server.js ←→ node-pty ←→ Clau
 | `src/components/SessionList.tsx` | Session list with actions |
 | `src/components/Navbar.tsx` | Top bar (session name, status, sidebar toggle) |
 | `src/components/ui/` | Aceternity UI components |
+| `presence-manager.js` | Server-side presence: peers, cursors, chat broadcast |
+| `src/components/presence/PresenceProvider.tsx` | WebSocket client, presence state context |
+| `src/components/presence/CursorOverlay.tsx` | Overlay layer, mouse tracking, chat open/close |
+| `src/components/presence/Cursor.tsx` | Unified cursor SVG + chat bubble + name tag |
+| `src/components/presence/PresenceAvatars.tsx` | Session peer avatars in navbar |
+| `src/lib/presence-colors.ts` | 12-color palette for cursors |
 | `ecosystem.config.js` | PM2 production config |
 
 ## Auth flow
@@ -56,6 +65,18 @@ Solution:
 3. Server pipes image to `xclip -selection clipboard` on virtual display (DISPLAY=:99 via Xvfb)
 4. Server sends `\x16` (Ctrl+V) to PTY → Claude CLI reads X11 clipboard
 5. If text: paste event propagates to xterm.js naturally
+
+## Presence system
+
+Figma-like multi-user presence. Separate WebSocket endpoint `/api/presence`.
+
+**Server** (`presence-manager.js`): tracks peers per session, broadcasts cursor positions, chat messages, and peer lists. Round-robin 12-color assignment.
+
+**Client** (`PresenceProvider`): connects via WebSocket with short-lived token. Exposes context: peers, chatMessages, sendCursor, sendChat, sendChatClose, joinSession.
+
+**Cursor component**: single unified component with flex auto-layout (SVG cursor → chat bubble → name tag). Chat bubble appears on "/" key press with blur animation. Text broadcasts live on each keystroke. Auto-close after 5s inactivity. Name tag hidden for local user.
+
+**Chat flow**: "/" opens input → keystrokes broadcast via `chat` message → Enter submits (bubble stays 5s for observers) → Escape/blur/inactivity closes and sends `chat_close`.
 
 ## Conventions
 

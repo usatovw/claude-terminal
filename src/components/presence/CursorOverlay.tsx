@@ -159,7 +159,7 @@ export default function CursorOverlay() {
   return (
     <div
       id="presence-overlay"
-      className="absolute pointer-events-none z-50 overflow-hidden"
+      className="absolute pointer-events-none z-10 overflow-hidden"
       style={{
         top: "1px",
         left: "1px",

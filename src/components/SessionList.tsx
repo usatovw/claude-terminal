@@ -5,6 +5,7 @@ import { Pencil, Trash, Play, Pause, FolderIcon } from "@/components/Icons";
 import { HoverBorderGradient } from "@/components/ui/hover-border-gradient";
 import { relativeTime } from "@/lib/utils";
 import SessionDeleteModal from "@/components/SessionDeleteModal";
+import HotkeysModal from "@/components/HotkeysModal";
 import PresenceAvatars from "@/components/presence/PresenceAvatars";
 import type { ThemeId } from "@/lib/ThemeContext";
 
@@ -49,6 +50,7 @@ export default function SessionList({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Session | null>(null);
+  const [hotkeysOpen, setHotkeysOpen] = useState(false);
 
   const fetchSessions = useCallback(async () => {
     try {
@@ -213,7 +215,7 @@ export default function SessionList({
         )}
       </div>
 
-      {/* Footer — theme toggle + logout */}
+      {/* Footer — theme toggle + hotkeys + logout */}
       <div className="border-t border-border px-3 py-2 flex items-center justify-between">
         {onToggleTheme && (
           <button
@@ -229,6 +231,18 @@ export default function SessionList({
             <span>{theme === "dark" ? "Retro" : "Dark"}</span>
           </button>
         )}
+        <button
+          onClick={() => setHotkeysOpen(true)}
+          className="flex items-center justify-center text-muted hover:text-foreground transition-colors cursor-pointer"
+          title="Горячие клавиши"
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+            <rect x="2" y="4" width="20" height="16" rx="2" />
+            <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01" />
+            <path d="M6 12h.01M10 12h.01M14 12h.01M18 12h.01" />
+            <path d="M8 16h8" />
+          </svg>
+        </button>
         {onLogout && (
           <button
             onClick={onLogout}
@@ -245,6 +259,7 @@ export default function SessionList({
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeleteTarget(null)}
       />
+      <HotkeysModal open={hotkeysOpen} onClose={() => setHotkeysOpen(false)} />
     </div>
   );
 }

@@ -8,6 +8,7 @@ import "@xterm/xterm/css/xterm.css";
 import { useTheme } from "@/lib/ThemeContext";
 import { themeConfigs } from "@/lib/theme-config";
 import { useTerminalScroll } from "@/lib/TerminalScrollContext";
+import { getOS } from "@/lib/useOS";
 
 interface TerminalProps {
   sessionId: string;
@@ -173,11 +174,46 @@ export default function Terminal({ sessionId, fullscreen, onConnectionChange }: 
       }
     });
 
-    // Block xterm from sending \x16 on Ctrl+V — we handle paste via paste event
+    // Platform-aware keyboard handling
+    const isMac = getOS() === "mac";
+
     term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
-      if (e.type === "keydown" && (e.ctrlKey || e.metaKey) && e.key === "v") {
+      if (e.type !== "keydown") return true;
+
+      // --- Paste: Ctrl+V / Cmd+V / Ctrl+Shift+V ---
+      if (
+        ((e.ctrlKey || e.metaKey) && e.key === "v") ||
+        (e.ctrlKey && e.shiftKey && e.key === "V")
+      ) {
         return false; // Block xterm, let browser fire paste event naturally
       }
+
+      // --- Copy (Win/Linux only — Mac uses Cmd+C natively) ---
+      if (!isMac) {
+        // Ctrl+Shift+C → always copy
+        if (e.ctrlKey && e.shiftKey && e.key === "C") {
+          const sel = term.getSelection();
+          if (sel) {
+            e.preventDefault();
+            navigator.clipboard.writeText(sel);
+            term.clearSelection();
+          }
+          return false;
+        }
+
+        // Ctrl+C: with selection → copy, without → SIGINT
+        if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "c") {
+          const sel = term.getSelection();
+          if (sel) {
+            e.preventDefault();
+            navigator.clipboard.writeText(sel);
+            term.clearSelection();
+            return false;
+          }
+          return true; // No selection — let xterm send SIGINT
+        }
+      }
+
       return true;
     });
 

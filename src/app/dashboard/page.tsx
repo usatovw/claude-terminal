@@ -12,8 +12,10 @@ import { TypewriterEffect } from "@/components/ui/typewriter-effect";
 import { TextGenerateEffect } from "@/components/ui/text-generate-effect";
 import { FlipWords } from "@/components/ui/flip-words";
 import { Spotlight } from "@/components/ui/spotlight";
-import { HoverBorderGradient } from "@/components/ui/hover-border-gradient";
 import { Maximize, Minimize, X } from "@/components/Icons";
+import ComboButton from "@/components/ComboButton";
+import ProviderWizardModal from "@/components/ProviderWizardModal";
+import ProviderConfigModal from "@/components/ProviderConfigModal";
 import PresenceProvider, { usePresence } from "@/components/presence/PresenceProvider";
 import CursorOverlay from "@/components/presence/CursorOverlay";
 import { UserProvider } from "@/lib/UserContext";
@@ -23,6 +25,7 @@ import { themeConfigs } from "@/lib/theme-config";
 import ChatPanel from "@/components/chat/ChatPanel";
 import ImageLightbox from "@/components/chat/ImageLightbox";
 import { TerminalScrollProvider } from "@/lib/TerminalScrollContext";
+import { ProviderProvider, useProviders, type Provider } from "@/lib/ProviderContext";
 
 const Terminal = dynamic(() => import("@/components/Terminal"), {
   ssr: false,
@@ -38,7 +41,9 @@ export default function Dashboard() {
     <ThemeProvider>
       <UserProvider>
         <PresenceProvider>
-          <DashboardInner />
+          <ProviderProvider>
+            <DashboardInner />
+          </ProviderProvider>
         </PresenceProvider>
       </UserProvider>
     </ThemeProvider>
@@ -49,8 +54,10 @@ function DashboardInner() {
   const router = useRouter();
   const { joinSession: presenceJoin } = usePresence();
   const { theme, toggleTheme } = useTheme();
+  const { providers, refetch: refetchProviders } = useProviders();
   const contentRef = useRef<HTMLDivElement>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [activeProviderSlug, setActiveProviderSlug] = useState<string>("claude");
   const [terminalKey, setTerminalKey] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -58,12 +65,22 @@ function DashboardInner() {
   const [connectionStatus, setConnectionStatus] = useState<
     "connected" | "disconnected" | "idle"
   >("idle");
-  const [sessions, setSessions] = useState<Array<{sessionId: string; displayName: string | null; isActive: boolean}>>([]);
+  const [sessions, setSessions] = useState<Array<{sessionId: string; displayName: string | null; isActive: boolean; providerSlug: string}>>([]);
   const [viewMode, setViewMode] = useState<ViewMode>("terminal");
   const [resumingSessionId, setResumingSessionId] = useState<string | null>(null);
   const [creatingSession, setCreatingSession] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+
+  // Welcome screen combo button state
+  const [welcomeSelectedSlug, setWelcomeSelectedSlug] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("selectedProvider") || "claude";
+    }
+    return "claude";
+  });
+  const [welcomeWizardOpen, setWelcomeWizardOpen] = useState(false);
+  const [welcomeConfigProvider, setWelcomeConfigProvider] = useState<Provider | null>(null);
 
   const sessionCount = {
     total: sessions.length,
@@ -110,6 +127,13 @@ function DashboardInner() {
     if (activeSessionId) presenceJoin(activeSessionId);
   }, [activeSessionId, presenceJoin]);
 
+  // Track provider of active session
+  useEffect(() => {
+    if (activeSession?.providerSlug) {
+      setActiveProviderSlug(activeSession.providerSlug);
+    }
+  }, [activeSession]);
+
   // Escape to exit fullscreen
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -145,10 +169,14 @@ function DashboardInner() {
     [activeSessionId]
   );
 
-  const handleNewSession = useCallback(async () => {
+  const handleNewSession = useCallback(async (providerSlug: string = "claude") => {
     setCreatingSession(true);
     try {
-      const res = await fetch("/api/sessions", { method: "POST" });
+      const res = await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ providerSlug }),
+      });
       if (res.ok) {
         const data = await res.json();
         setActiveSessionId(data.sessionId);
@@ -204,6 +232,53 @@ function DashboardInner() {
       setResumingSessionId(null);
     }
   }, [activeSessionId]);
+
+  // Welcome screen provider handlers
+  const handleWelcomeSaveProvider = useCallback(async (data: {
+    name: string; slug: string; command: string; resumeCommand: string; icon: string; color: string;
+  }) => {
+    const res = await fetch("/api/providers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: data.name, slug: data.slug, command: data.command,
+        resumeCommand: data.resumeCommand || null, icon: data.icon, color: data.color,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Ошибка");
+    }
+    await refetchProviders();
+    setWelcomeSelectedSlug(data.slug);
+    try { localStorage.setItem("selectedProvider", data.slug); } catch {}
+  }, [refetchProviders]);
+
+  const handleWelcomeUpdateProvider = useCallback(async (slug: string, data: { name?: string; command?: string; resumeCommand?: string }) => {
+    const res = await fetch(`/api/providers/${slug}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Ошибка");
+    }
+    await refetchProviders();
+  }, [refetchProviders]);
+
+  const handleWelcomeDeleteProvider = useCallback(async (slug: string) => {
+    const res = await fetch(`/api/providers/${slug}`, { method: "DELETE" });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Ошибка");
+    }
+    await refetchProviders();
+    if (welcomeSelectedSlug === slug) {
+      setWelcomeSelectedSlug("claude");
+      try { localStorage.setItem("selectedProvider", "claude"); } catch {}
+    }
+  }, [refetchProviders, welcomeSelectedSlug]);
 
   return (
     <div className="flex h-screen bg-background">
@@ -283,6 +358,7 @@ function DashboardInner() {
           <Navbar
             activeSessionId={activeSessionId}
             activeSessionName={activeSessionName}
+            providerSlug={activeProviderSlug}
             connectionStatus={connectionStatus}
             sessionCount={sessionCount}
             sidebarOpen={sidebarOpen}
@@ -388,14 +464,19 @@ function DashboardInner() {
                   />
                 </div>
 
-                <HoverBorderGradient
-                  as="button"
-                  containerClassName="mx-auto"
-                  className="flex items-center justify-center gap-2 bg-surface text-foreground px-6 py-3 text-sm font-medium"
-                  onClick={handleNewSession}
-                >
-                  Начать общение
-                </HoverBorderGradient>
+                <ComboButton
+                  providers={providers}
+                  selectedSlug={welcomeSelectedSlug}
+                  onSelect={(slug) => {
+                    setWelcomeSelectedSlug(slug);
+                    try { localStorage.setItem("selectedProvider", slug); } catch {}
+                  }}
+                  onCreate={(slug) => handleNewSession(slug)}
+                  onAddProvider={() => setWelcomeWizardOpen(true)}
+                  onConfigureProvider={(p) => setWelcomeConfigProvider(p)}
+                  creating={creatingSession}
+                  variant="welcome"
+                />
               </div>
             </div>
           )}
@@ -447,6 +528,20 @@ function DashboardInner() {
           onClose={() => setLightboxSrc(null)}
         />
       )}
+
+      {/* Welcome screen modals */}
+      <ProviderWizardModal
+        open={welcomeWizardOpen}
+        onClose={() => setWelcomeWizardOpen(false)}
+        onSave={handleWelcomeSaveProvider}
+      />
+      <ProviderConfigModal
+        open={!!welcomeConfigProvider}
+        provider={welcomeConfigProvider}
+        onClose={() => setWelcomeConfigProvider(null)}
+        onSave={handleWelcomeUpdateProvider}
+        onDelete={handleWelcomeDeleteProvider}
+      />
     </div>
   );
 }

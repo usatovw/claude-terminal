@@ -175,15 +175,32 @@ export default function Terminal({ sessionId, fullscreen, onConnectionChange }: 
     });
 
     // Platform-aware keyboard handling
+    // Use e.code (physical key) instead of e.key to work with any keyboard layout (RU, etc.)
     const isMac = getOS() === "mac";
+
+    // Clipboard write helper — works on both HTTPS and HTTP
+    const copyText = (text: string) => {
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(text).catch(() => {});
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+    };
 
     term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
       if (e.type !== "keydown") return true;
 
       // --- Paste: Ctrl+V / Cmd+V / Ctrl+Shift+V ---
       if (
-        ((e.ctrlKey || e.metaKey) && e.key === "v") ||
-        (e.ctrlKey && e.shiftKey && e.key === "V")
+        ((e.ctrlKey || e.metaKey) && e.code === "KeyV") ||
+        (e.ctrlKey && e.shiftKey && e.code === "KeyV")
       ) {
         return false; // Block xterm, let browser fire paste event naturally
       }
@@ -191,22 +208,22 @@ export default function Terminal({ sessionId, fullscreen, onConnectionChange }: 
       // --- Copy (Win/Linux only — Mac uses Cmd+C natively) ---
       if (!isMac) {
         // Ctrl+Shift+C → always copy
-        if (e.ctrlKey && e.shiftKey && e.key === "C") {
+        if (e.ctrlKey && e.shiftKey && e.code === "KeyC") {
           const sel = term.getSelection();
           if (sel) {
             e.preventDefault();
-            navigator.clipboard.writeText(sel);
+            copyText(sel);
             term.clearSelection();
           }
           return false;
         }
 
         // Ctrl+C: with selection → copy, without → SIGINT
-        if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "c") {
+        if (e.ctrlKey && !e.shiftKey && !e.altKey && e.code === "KeyC") {
           const sel = term.getSelection();
           if (sel) {
             e.preventDefault();
-            navigator.clipboard.writeText(sel);
+            copyText(sel);
             term.clearSelection();
             return false;
           }

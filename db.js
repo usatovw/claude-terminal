@@ -46,6 +46,19 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS cli_providers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    slug TEXT UNIQUE NOT NULL,
+    command TEXT NOT NULL,
+    resume_command TEXT DEFAULT NULL,
+    icon TEXT NOT NULL DEFAULT 'terminal',
+    color TEXT NOT NULL DEFAULT '#8b5cf6',
+    sort_order INTEGER NOT NULL DEFAULT 100,
+    is_builtin INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `);
 
 // Seed admin user from env vars on first run
@@ -73,5 +86,24 @@ function seedAdmin() {
 }
 
 seedAdmin();
+
+// Seed built-in CLI providers
+function seedProviders() {
+  const builtins = [
+    { slug: "terminal", name: "Terminal", command: "/bin/bash", resume_command: null, icon: "terminal", color: "#52525b", sort_order: 1 },
+    { slug: "claude", name: "Claude", command: "/usr/bin/claude", resume_command: "/usr/bin/claude --continue", icon: "claude", color: "#d4a574", sort_order: 2 },
+  ];
+
+  const insert = db.prepare(
+    `INSERT OR IGNORE INTO cli_providers (slug, name, command, resume_command, icon, color, sort_order, is_builtin)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 1)`
+  );
+
+  for (const p of builtins) {
+    insert.run(p.slug, p.name, p.command, p.resume_command, p.icon, p.color, p.sort_order);
+  }
+}
+
+seedProviders();
 
 module.exports = db;

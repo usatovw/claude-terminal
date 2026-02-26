@@ -1,12 +1,14 @@
 "use client";
 
 import { Wifi, WifiOff, Menu, ChevronLeft, ChevronRight, TerminalIcon, FolderIcon, MessageCircle } from "@/components/Icons";
+import { getProviderIcon } from "@/lib/provider-icons";
 
 export type ViewMode = "terminal" | "files";
 
 interface NavbarProps {
   activeSessionId: string | null;
   activeSessionName?: string | null;
+  providerSlug?: string;
   connectionStatus: "connected" | "disconnected" | "idle";
   sessionCount: { total: number; active: number };
   sidebarOpen?: boolean;
@@ -21,6 +23,7 @@ interface NavbarProps {
 export default function Navbar({
   activeSessionId,
   activeSessionName,
+  providerSlug,
   connectionStatus,
   sessionCount,
   sidebarOpen,
@@ -31,6 +34,8 @@ export default function Navbar({
   chatOpen,
   onToggleChat,
 }: NavbarProps) {
+  const ProvIcon = providerSlug ? getProviderIcon(providerSlug) : null;
+
   return (
     <div className="h-14 border-b border-border flex items-center justify-between px-3 md:px-5 bg-surface backdrop-blur-xl">
       <div className="flex items-center gap-2">
@@ -60,9 +65,12 @@ export default function Navbar({
         )}
 
         {activeSessionId && (
-          <span className="text-sm text-muted-fg font-mono truncate max-w-[150px] md:max-w-none">
-            {activeSessionName || activeSessionId}
-          </span>
+          <div className="flex items-center gap-1.5">
+            {ProvIcon && <ProvIcon className="w-4 h-4 text-muted-fg" />}
+            <span className="text-sm text-muted-fg font-mono truncate max-w-[150px] md:max-w-none">
+              {activeSessionName || activeSessionId}
+            </span>
+          </div>
         )}
 
         {/* View mode toggle */}

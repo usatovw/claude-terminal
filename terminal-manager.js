@@ -20,9 +20,17 @@ delete PTY_ENV.SSH_AUTH_SOCK;
 const DATA_DIR = path.join(process.env.HOME || "/root", "projects", "Claude");
 const SESSIONS_FILE = path.join(DATA_DIR, ".sessions.json");
 
+// Validate command string: no shell metacharacters
+function validateCommand(cmd) {
+  if (/[;|&$`\\]/.test(cmd)) {
+    throw new Error("Command contains forbidden shell metacharacters");
+  }
+}
+
 class TerminalManager {
   constructor() {
     this.sessions = new Map();
+    this.ephemeralSessions = new Map();
     this._loadSessions();
   }
 
@@ -34,6 +42,7 @@ class TerminalManager {
         projectDir: session.projectDir,
         createdAt: session.createdAt,
         displayName: session.displayName,
+        providerSlug: session.providerSlug || "claude",
       });
     }
     try {
@@ -58,6 +67,7 @@ class TerminalManager {
             buffer: "",
             exited: true, // All restored sessions start as stopped
             displayName: entry.displayName || null,
+            providerSlug: entry.providerSlug || "claude",
           });
         }
       }
@@ -91,7 +101,14 @@ class TerminalManager {
     });
   }
 
-  createSession() {
+  createSession(providerSlug = "claude") {
+    // Look up provider from DB
+    const db = global.db;
+    const provider = db.prepare("SELECT * FROM cli_providers WHERE slug = ?").get(providerSlug);
+    if (!provider) {
+      throw new Error(`Provider "${providerSlug}" not found`);
+    }
+
     const now = new Date();
     const pad = (n) => n.toString().padStart(2, "0");
     const sessionId = [
@@ -106,7 +123,12 @@ class TerminalManager {
     const projectDir = path.join(DATA_DIR, sessionId);
     fs.mkdirSync(projectDir, { recursive: true });
 
-    const ptyProcess = pty.spawn("/usr/bin/claude", [], {
+    const parts = provider.command.split(" ").filter(Boolean);
+    validateCommand(provider.command);
+    const executable = parts[0];
+    const args = parts.slice(1);
+
+    const ptyProcess = pty.spawn(executable, args, {
       name: "xterm-256color",
       cols: 120,
       rows: 40,
@@ -122,6 +144,7 @@ class TerminalManager {
       buffer: "",
       exited: false,
       displayName: null,
+      providerSlug,
     };
 
     this._setupPty(session);
@@ -135,7 +158,28 @@ class TerminalManager {
     if (!session) return { ok: false, error: "not_found" };
     if (!session.exited) return { ok: false, error: "already_active" };
 
-    const ptyProcess = pty.spawn("/usr/bin/claude", ["--continue"], {
+    // Look up provider for resume command
+    const db = global.db;
+    const provider = db.prepare("SELECT * FROM cli_providers WHERE slug = ?").get(session.providerSlug || "claude");
+
+    let executable, args;
+    if (provider && provider.resume_command) {
+      validateCommand(provider.resume_command);
+      const parts = provider.resume_command.split(" ").filter(Boolean);
+      executable = parts[0];
+      args = parts.slice(1);
+    } else if (provider) {
+      validateCommand(provider.command);
+      const parts = provider.command.split(" ").filter(Boolean);
+      executable = parts[0];
+      args = parts.slice(1);
+    } else {
+      // Fallback for deleted providers
+      executable = "/bin/bash";
+      args = [];
+    }
+
+    const ptyProcess = pty.spawn(executable, args, {
       name: "xterm-256color",
       cols: 120,
       rows: 40,
@@ -335,7 +379,95 @@ class TerminalManager {
       sessionId,
       projectDir: session.projectDir,
       isActive: !session.exited,
+      providerSlug: session.providerSlug || "claude",
     };
+  }
+
+  // ── Ephemeral sessions (for provider wizard auth terminal) ──
+
+  createEphemeralSession() {
+    if (this.ephemeralSessions.size >= 3) {
+      throw new Error("Max ephemeral sessions reached (3)");
+    }
+
+    const id = `eph-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+    const ptyProcess = pty.spawn("/bin/bash", [], {
+      name: "xterm-256color",
+      cols: 120,
+      rows: 15,
+      cwd: process.env.HOME || "/root",
+      env: PTY_ENV,
+    });
+
+    const session = {
+      pty: ptyProcess,
+      connectedClients: new Set(),
+      buffer: "",
+      exited: false,
+      createdAt: Date.now(),
+    };
+
+    // Auto-destroy after 5 minutes
+    session._timeout = setTimeout(() => {
+      this.destroyEphemeralSession(id);
+    }, 5 * 60 * 1000);
+
+    this._setupPty(session);
+    this.ephemeralSessions.set(id, session);
+    return id;
+  }
+
+  attachToEphemeralSession(id, ws) {
+    const session = this.ephemeralSessions.get(id);
+    if (!session) {
+      ws.send(JSON.stringify({ type: "error", message: "Ephemeral session not found" }));
+      ws.close();
+      return;
+    }
+
+    session.connectedClients.add(ws);
+
+    if (session.buffer) {
+      ws.send(JSON.stringify({ type: "output", data: session.buffer }));
+    }
+
+    ws.on("message", (rawMessage) => {
+      try {
+        const message = JSON.parse(rawMessage.toString());
+        if (message.type === "input" && !session.exited) {
+          session.pty.write(message.data);
+        } else if (message.type === "resize" && !session.exited && message.cols && message.rows) {
+          session.pty.resize(message.cols, message.rows);
+        }
+      } catch {}
+    });
+
+    ws.on("close", () => {
+      session.connectedClients.delete(ws);
+    });
+  }
+
+  destroyEphemeralSession(id) {
+    const session = this.ephemeralSessions.get(id);
+    if (!session) return false;
+
+    if (session._timeout) clearTimeout(session._timeout);
+
+    if (!session.exited) {
+      session.pty.kill();
+      session.exited = true;
+    }
+
+    for (const client of session.connectedClients) {
+      if (client.readyState === 1) {
+        client.send(JSON.stringify({ type: "exit", exitCode: 0, signal: 0 }));
+      }
+      client.close();
+    }
+
+    this.ephemeralSessions.delete(id);
+    return true;
   }
 
   listSessions() {
@@ -356,6 +488,7 @@ class TerminalManager {
         isActive: !session.exited,
         connectedClients: session.connectedClients.size,
         hasFiles,
+        providerSlug: session.providerSlug || "claude",
       });
     }
     return result;

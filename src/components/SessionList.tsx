@@ -2,11 +2,15 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Pencil, Trash, Play, Pause, FolderIcon } from "@/components/Icons";
-import { HoverBorderGradient } from "@/components/ui/hover-border-gradient";
 import { relativeTime } from "@/lib/utils";
 import SessionDeleteModal from "@/components/SessionDeleteModal";
 import HotkeysModal from "@/components/HotkeysModal";
 import PresenceAvatars from "@/components/presence/PresenceAvatars";
+import ComboButton from "@/components/ComboButton";
+import ProviderWizardModal from "@/components/ProviderWizardModal";
+import ProviderConfigModal from "@/components/ProviderConfigModal";
+import { useProviders, type Provider } from "@/lib/ProviderContext";
+import { getProviderIcon } from "@/lib/provider-icons";
 import type { ThemeId } from "@/lib/ThemeContext";
 
 interface Session {
@@ -17,13 +21,14 @@ interface Session {
   isActive: boolean;
   connectedClients: number;
   hasFiles: boolean;
+  providerSlug: string;
 }
 
 interface SessionListProps {
   activeSessionId: string | null;
   onSelectSession: (sessionId: string) => void;
   onSessionDeleted: (sessionId: string) => void;
-  onNewSession: () => void;
+  onNewSession: (providerSlug: string) => void;
   onOpenFiles?: (sessionId: string) => void;
   onResumeSession?: (sessionId: string) => void;
   resumingSessionId?: string | null;
@@ -51,6 +56,18 @@ export default function SessionList({
   const [editName, setEditName] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Session | null>(null);
   const [hotkeysOpen, setHotkeysOpen] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [configProvider, setConfigProvider] = useState<Provider | null>(null);
+
+  const { providers, refetch: refetchProviders } = useProviders();
+
+  // Selected provider slug (persisted in localStorage)
+  const [selectedSlug, setSelectedSlug] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("selectedProvider") || "claude";
+    }
+    return "claude";
+  });
 
   const fetchSessions = useCallback(async () => {
     try {
@@ -125,6 +142,56 @@ export default function SessionList({
     else if (e.key === "Escape") setEditingId(null);
   };
 
+  const handleSaveProvider = useCallback(async (data: {
+    name: string; slug: string; command: string; resumeCommand: string; icon: string; color: string;
+  }) => {
+    const res = await fetch("/api/providers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: data.name,
+        slug: data.slug,
+        command: data.command,
+        resumeCommand: data.resumeCommand || null,
+        icon: data.icon,
+        color: data.color,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Ошибка");
+    }
+    await refetchProviders();
+    setSelectedSlug(data.slug);
+    try { localStorage.setItem("selectedProvider", data.slug); } catch {}
+  }, [refetchProviders]);
+
+  const handleUpdateProvider = useCallback(async (slug: string, data: { name?: string; command?: string; resumeCommand?: string }) => {
+    const res = await fetch(`/api/providers/${slug}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Ошибка");
+    }
+    await refetchProviders();
+  }, [refetchProviders]);
+
+  const handleDeleteProvider = useCallback(async (slug: string) => {
+    const res = await fetch(`/api/providers/${slug}`, { method: "DELETE" });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Ошибка");
+    }
+    await refetchProviders();
+    if (selectedSlug === slug) {
+      setSelectedSlug("claude");
+      try { localStorage.setItem("selectedProvider", "claude"); } catch {}
+    }
+  }, [refetchProviders, selectedSlug]);
+
   const byNewest = (a: Session, b: Session) =>
     new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   const activeSessions = sessions.filter((s) => s.isActive).sort(byNewest);
@@ -134,21 +201,16 @@ export default function SessionList({
     <div className="flex flex-col h-full">
       {/* New session button */}
       <div className="h-14 px-3 flex items-center border-b border-border">
-        <HoverBorderGradient
-          as="button"
-          containerClassName="w-full"
-          className="w-full flex items-center justify-center gap-2 bg-surface text-foreground px-4 py-2 text-sm font-medium"
-          onClick={creatingSession ? undefined : onNewSession}
-        >
-          {creatingSession ? (
-            <>
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              <span>Создание...</span>
-            </>
-          ) : (
-            "Новый чат"
-          )}
-        </HoverBorderGradient>
+        <ComboButton
+          providers={providers}
+          selectedSlug={selectedSlug}
+          onSelect={setSelectedSlug}
+          onCreate={(slug) => onNewSession(slug)}
+          onAddProvider={() => setWizardOpen(true)}
+          onConfigureProvider={(p) => setConfigProvider(p)}
+          creating={creatingSession}
+          variant="sidebar"
+        />
       </div>
 
       <div className="flex-1 overflow-y-auto p-2 space-y-4">
@@ -260,6 +322,18 @@ export default function SessionList({
         onCancel={() => setDeleteTarget(null)}
       />
       <HotkeysModal open={hotkeysOpen} onClose={() => setHotkeysOpen(false)} />
+      <ProviderWizardModal
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        onSave={handleSaveProvider}
+      />
+      <ProviderConfigModal
+        open={!!configProvider}
+        provider={configProvider}
+        onClose={() => setConfigProvider(null)}
+        onSave={handleUpdateProvider}
+        onDelete={handleDeleteProvider}
+      />
     </div>
   );
 }
@@ -296,6 +370,7 @@ function SessionItem({
   onOpenFiles?: (e: React.MouseEvent) => void;
 }) {
   const isEditing = editingId === session.sessionId;
+  const ProviderIcon = getProviderIcon(session.providerSlug === "terminal" ? "terminal" : session.providerSlug === "claude" ? "claude" : session.providerSlug || "default");
 
   return (
     <div
@@ -319,6 +394,7 @@ function SessionItem({
               }`}
             />
           )}
+          <ProviderIcon className="w-3.5 h-3.5 text-muted-fg flex-shrink-0" />
           {isEditing ? (
             <input
               type="text"

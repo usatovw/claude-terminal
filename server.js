@@ -22,6 +22,26 @@ const { parse } = require("url");
 const next = require("next");
 const { WebSocketServer } = require("ws");
 const jwt = require("jsonwebtoken");
+const { execSync, spawn } = require("child_process");
+
+// ── Ensure Xvfb is running on :99 (needed for xclip clipboard bridge) ──
+(function ensureXvfb() {
+  // Check via X11 lock file — reliable and doesn't false-match shell wrappers
+  if (fs.existsSync("/tmp/.X99-lock")) {
+    console.log("> Xvfb :99 already running (lock file exists)");
+    return;
+  }
+  console.log("> Starting Xvfb on :99...");
+  const xvfb = spawn("Xvfb", [":99", "-screen", "0", "1024x768x24"], {
+    stdio: "ignore",
+    detached: true,
+  });
+  xvfb.unref();
+  // Give it a moment to create the lock file
+  execSync("sleep 0.5");
+  console.log("> Xvfb started (PID:", xvfb.pid + ")");
+})();
+
 const db = require("./db");
 global.db = db;
 const { TerminalManager } = require("./terminal-manager");
@@ -86,7 +106,13 @@ app.prepare().then(() => {
           ws.close();
           return;
         }
-        terminalManager.attachToSession(sessionId, ws);
+
+        // Ephemeral sessions (for provider wizard auth terminal)
+        if (query.ephemeral === "true") {
+          terminalManager.attachToEphemeralSession(sessionId, ws);
+        } else {
+          terminalManager.attachToSession(sessionId, ws);
+        }
       });
       return;
     }

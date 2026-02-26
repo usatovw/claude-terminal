@@ -13,9 +13,9 @@ function getTM(): TerminalManager {
   return (global as Record<string, unknown>).terminalManager as TerminalManager;
 }
 
-function authCheck(request: NextRequest): boolean {
-  const token = request.cookies.get("auth-token")?.value;
-  return !!token && !!verifyToken(token);
+function getUser(req: NextRequest) {
+  const token = req.cookies.get("auth-token")?.value;
+  return token ? verifyToken(token) : null;
 }
 
 // Stop and delete
@@ -23,9 +23,14 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!authCheck(request)) {
+  const user = getUser(request);
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (user.role === "guest") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const { id } = await params;
   const searchParams = new URL(request.url).searchParams;
   const action = searchParams.get("action");
@@ -49,9 +54,14 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!authCheck(request)) {
+  const user = getUser(request);
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (user.role === "guest") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const { id } = await params;
   const result = getTM().resumeSession(id);
 
@@ -66,9 +76,14 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!authCheck(request)) {
+  const user = getUser(request);
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (user.role === "guest") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const { id } = await params;
   const { displayName } = await request.json();
 

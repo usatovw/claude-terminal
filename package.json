@@ -2,6 +2,9 @@
   "name": "claude-terminal",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "node server.js",
     "build": "next build && mkdir -p .next/standalone/.next && cp -r .next/static .next/standalone/.next/static",

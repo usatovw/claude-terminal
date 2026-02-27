@@ -175,7 +175,7 @@ attachments: id, message_id (FK→messages CASCADE), file_path,
 ## Environment
 
 Requires on the host:
-- Node.js 18+
+- Node.js 20+
 - Claude CLI installed at `/usr/bin/claude` with active subscription
 - Xvfb running on DISPLAY :99 (for clipboard bridge)
 - xclip installed

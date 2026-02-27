@@ -20,7 +20,12 @@ Self-hosted web interface for [Claude Code CLI](https://docs.anthropic.com/en/do
 ## Prerequisites
 
 - **Linux** (Ubuntu 22+ recommended)
-- **Node.js 18+**
+- **Node.js 20+** (Ubuntu ships Node 18 — use nvm)
+  ```bash
+  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+  source ~/.bashrc
+  nvm install 20
+  ```
 - **build-essential** + **python3** (for native modules: node-pty, better-sqlite3)
   ```bash
   sudo apt install -y build-essential python3

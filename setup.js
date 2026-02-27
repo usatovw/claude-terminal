@@ -56,9 +56,10 @@ function askYN(question, defaultYes = false) {
 
 function askPassword(prompt) {
   return new Promise((resolve) => {
+    // Pause readline so it doesn't interfere with raw mode
+    rl.pause();
     process.stdout.write(`  ${prompt}: `);
     const stdin = process.stdin;
-    const wasRaw = stdin.isRaw;
     stdin.setRawMode(true);
     stdin.resume();
     stdin.setEncoding("utf-8");
@@ -67,10 +68,11 @@ function askPassword(prompt) {
     const onData = (ch) => {
       const c = ch.toString();
       if (c === "\n" || c === "\r" || c === "\u0004") {
-        stdin.setRawMode(wasRaw || false);
         stdin.removeListener("data", onData);
-        stdin.pause();
+        stdin.setRawMode(false);
         process.stdout.write("\n");
+        // Resume readline so subsequent ask() calls work
+        rl.resume();
         resolve(password);
       } else if (c === "\u0003") {
         // Ctrl+C
@@ -82,7 +84,8 @@ function askPassword(prompt) {
           password = password.slice(0, -1);
           process.stdout.write("\b \b");
         }
-      } else {
+      } else if (c.charCodeAt(0) >= 32) {
+        // Only printable characters
         password += c;
         process.stdout.write("*");
       }
@@ -157,10 +160,12 @@ async function main() {
   // Node.js version
   const nodeVersion = process.version;
   const nodeMajor = parseInt(nodeVersion.slice(1).split(".")[0], 10);
-  if (nodeMajor >= 18) {
-    ok(`Node.js ${nodeVersion} (required: 18+)`);
+  if (nodeMajor >= 20) {
+    ok(`Node.js ${nodeVersion} (required: 20+)`);
   } else {
-    fail(`Node.js ${nodeVersion} — version 18+ required`);
+    fail(`Node.js ${nodeVersion} — version 20+ required`);
+    console.log("     Install via nvm: curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash");
+    console.log("     Then: nvm install 20 && nvm use 20");
     process.exit(1);
   }
 

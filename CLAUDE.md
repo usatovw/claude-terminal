@@ -19,9 +19,9 @@ Browser (chat UI) ←→ REST API ←→ server.js ←→ ChatManager ←→ SQL
                                           chat_message broadcast
 ```
 
-**server.js** — Custom HTTP server. Loads `.env.local`, initializes SQLite DB (`db.js`), creates TerminalManager, PresenceManager, ChatManager. Handles Next.js pages + WebSocket upgrades. JWT validation on WS upgrade returns decoded payload with user identity. Exposes globals: `global.db`, `global.terminalManager`, `global.presenceManager`, `global.chatManager`.
+**server.js** — Custom HTTP server. Loads `.env.local`, validates startup (JWT_SECRET required, warns on missing Xvfb/xclip/admin), initializes SQLite DB (`db.js`), creates TerminalManager, PresenceManager, ChatManager. Handles Next.js pages + WebSocket upgrades. JWT validation on WS upgrade returns decoded payload with user identity. Health check at `/api/health`. Graceful shutdown on SIGTERM/SIGINT. HOST env var support for Docker. Exposes globals: `global.db`, `global.terminalManager`, `global.presenceManager`, `global.chatManager`.
 
-**db.js** — SQLite database (better-sqlite3, WAL mode). Tables: `users`, `messages`, `attachments`. Auto-creates `data/` directory. Seeds admin from env vars on first run.
+**db.js** — SQLite database (better-sqlite3, WAL mode). Tables: `users`, `messages`, `attachments`. Auto-creates `data/` directory. Seeds admin from env vars on first run. Auto-detects Claude CLI path via `which claude`.
 
 **terminal-manager.js** — Manages PTY sessions. Spawns `claude` CLI via node-pty, tracks connected WebSocket clients, handles session lifecycle (create/stop/resume/delete/rename). Persists session metadata to `~/.sessions.json`. Replay buffer: 500KB circular — new clients receive full history on connect.
 
@@ -33,8 +33,10 @@ Browser (chat UI) ←→ REST API ←→ server.js ←→ ChatManager ←→ SQL
 
 | File | Purpose |
 |------|---------|
-| `server.js` | HTTP + WebSocket server, .env.local loader, global init |
-| `db.js` | SQLite init, schema, admin seed |
+| `server.js` | HTTP + WebSocket server, .env.local loader, startup validation, health check, graceful shutdown |
+| `db.js` | SQLite init, schema, admin seed, Claude CLI auto-detect |
+| `setup.js` | Interactive CLI setup wizard (admin account, secrets, .env.local) |
+| `approve.js` | CLI user management (list, approve, reject, create-admin) |
 | `terminal-manager.js` | PTY session manager (node-pty, xclip bridge) |
 | `chat-manager.js` | Persistent chat: messages, attachments, WS broadcast |
 | `src/lib/auth.ts` | JWT with full payload (userId, login, firstName, lastName, role) |
@@ -46,7 +48,9 @@ Browser (chat UI) ←→ REST API ←→ server.js ←→ ChatManager ←→ SQL
 | `src/lib/presence-names.ts` | Random Russian name generator (adjective + animal) |
 | `src/middleware.ts` | Route protection (redirect to login) |
 | `src/app/api/auth/route.ts` | Login — DB lookup, status check, rate-limited |
-| `src/app/api/auth/register/route.ts` | Registration — bcrypt, email to admin |
+| `src/app/api/auth/register/route.ts` | Registration — bcrypt, email or WS notify, rate-limited |
+| `src/app/api/admin/users/route.ts` | Admin API — list users, approve/reject/set role |
+| `src/app/api/admin/users/[id]/route.ts` | Admin API — delete user |
 | `src/app/api/auth/approve/route.ts` | Email link handler — approve/reject user |
 | `src/app/api/auth/guest/route.ts` | Guest login via secret code |
 | `src/app/api/auth/check/route.ts` | Auth check — returns user info from JWT |
@@ -63,7 +67,8 @@ Browser (chat UI) ←→ REST API ←→ server.js ←→ ChatManager ←→ SQL
 | `src/components/LoginForm.tsx` | Three tabs: Вход / Регистрация / Гость |
 | `src/components/Terminal.tsx` | xterm.js WebSocket client + clipboard bridge |
 | `src/components/SessionList.tsx` | Session list with actions + logout footer |
-| `src/components/Navbar.tsx` | Top bar — session info, view toggle, chat toggle |
+| `src/components/Navbar.tsx` | Top bar — session info, view toggle, admin toggle, chat toggle |
+| `src/components/AdminPanel.tsx` | Admin panel — user management slide-over |
 | `src/components/chat/ChatPanel.tsx` | Right panel — messages + media gallery switch |
 | `src/components/chat/ChatMessage.tsx` | Message bubble — avatar, name, text, attachments |
 | `src/components/chat/ChatInput.tsx` | Auto-grow textarea, file attach, paste images |
@@ -87,10 +92,11 @@ Three authentication modes:
 **Registered users** (role: admin | user):
 1. User registers via `/api/auth/register` (firstName, lastName, login, password)
 2. Server hashes password (bcrypt), inserts user with status=pending
-3. Email sent to ADMIN_EMAIL with signed approve/reject links (24h JWT)
-4. Admin clicks link → `/api/auth/approve` updates status
-5. User can now login → JWT with full payload → httpOnly cookie
-6. Rate limiting: 5 login attempts per 15 min per IP
+3. If SMTP configured: email sent to ADMIN_EMAIL with signed approve/reject links (24h JWT)
+4. If no SMTP: `pending_user` event broadcast to admin via presence WebSocket → admin panel notification
+5. Admin approves via email link, admin panel, or CLI (`node approve.js approve <login>`)
+6. User can now login → JWT with full payload → httpOnly cookie
+7. Rate limiting: 5 login attempts per 15 min per IP, 5 registrations per 15 min per IP
 
 **Guest access** (role: guest):
 1. User enters secret GUEST_ACCESS_CODE

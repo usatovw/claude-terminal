@@ -4,9 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "node server.js",
-    "build": "next build && cp -r .next/static .next/standalone/.next/static",
+    "build": "next build && mkdir -p .next/standalone/.next && cp -r .next/static .next/standalone/.next/static",
     "start": "NODE_ENV=production node server.js",
-    "lint": "eslint"
+    "lint": "eslint",
+    "setup": "node setup.js",
+    "approve": "node approve.js"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",

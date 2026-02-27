@@ -75,6 +75,15 @@ class PresenceManager {
     }
   }
 
+  broadcastToAll(message) {
+    const msg = typeof message === "string" ? message : JSON.stringify(message);
+    for (const [, peer] of this.peers) {
+      if (peer.ws.readyState === 1) {
+        peer.ws.send(msg);
+      }
+    }
+  }
+
   _broadcastPeersInSession(sessionId) {
     const peersInSession = [];
     for (const [id, peer] of this.peers) {

@@ -5,7 +5,30 @@ import { getDb } from "@/lib/db";
 import { sendRegistrationEmail } from "@/lib/email";
 import type { DbUser } from "@/lib/auth";
 
+// Rate limiting for registration
+const registerAttempts = new Map<
+  string,
+  { count: number; lastAttempt: number }
+>();
+const MAX_ATTEMPTS = 5;
+const WINDOW_MS = 15 * 60 * 1000;
+
 export async function POST(request: NextRequest) {
+  const ip = request.headers.get("x-forwarded-for") || "unknown";
+
+  // Rate limiting
+  const attempts = registerAttempts.get(ip);
+  if (attempts && attempts.count >= MAX_ATTEMPTS) {
+    const elapsed = Date.now() - attempts.lastAttempt;
+    if (elapsed < WINDOW_MS) {
+      return NextResponse.json(
+        { error: "Слишком много попыток регистрации. Попробуйте позже." },
+        { status: 429 }
+      );
+    }
+    registerAttempts.delete(ip);
+  }
+
   try {
     const { firstName, lastName, login, password } = await request.json();
 
@@ -53,6 +76,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Track registration attempt
+    const current = registerAttempts.get(ip) || { count: 0, lastAttempt: 0 };
+    registerAttempts.set(ip, {
+      count: current.count + 1,
+      lastAttempt: Date.now(),
+    });
+
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
 
@@ -68,31 +98,46 @@ export async function POST(request: NextRequest) {
 
     const userId = result.lastInsertRowid as number;
 
-    // Generate signed tokens for approve/reject (24h expiry)
-    const JWT_SECRET = process.env.JWT_SECRET!;
+    // Check if SMTP is configured
+    const smtpConfigured = !!(process.env.SMTP_USER && process.env.SMTP_PASS);
 
-    const approveToken = jwt.sign(
-      { purpose: "registration_approval", userId, action: "approve" },
-      JWT_SECRET,
-      { expiresIn: "24h" }
-    );
+    if (smtpConfigured) {
+      // Generate signed tokens for approve/reject (24h expiry)
+      const JWT_SECRET = process.env.JWT_SECRET!;
 
-    const rejectToken = jwt.sign(
-      { purpose: "registration_approval", userId, action: "reject" },
-      JWT_SECRET,
-      { expiresIn: "24h" }
-    );
-
-    // Send email to admin
-    try {
-      await sendRegistrationEmail(
-        { first_name: cleanFirstName, last_name: cleanLastName, login: cleanLogin },
-        approveToken,
-        rejectToken
+      const approveToken = jwt.sign(
+        { purpose: "registration_approval", userId, action: "approve" },
+        JWT_SECRET,
+        { expiresIn: "24h" }
       );
-    } catch (emailErr) {
-      console.error("[register] Failed to send email:", emailErr);
-      // Don't fail registration if email fails — admin can check DB
+
+      const rejectToken = jwt.sign(
+        { purpose: "registration_approval", userId, action: "reject" },
+        JWT_SECRET,
+        { expiresIn: "24h" }
+      );
+
+      // Send email to admin
+      try {
+        await sendRegistrationEmail(
+          { first_name: cleanFirstName, last_name: cleanLastName, login: cleanLogin },
+          approveToken,
+          rejectToken
+        );
+      } catch (emailErr) {
+        console.error("[register] Failed to send email:", emailErr);
+        // Don't fail registration if email fails — admin can check via panel
+      }
+    } else {
+      // No SMTP — broadcast to admin via presence WebSocket
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const presenceManager = (global as any).presenceManager;
+      if (presenceManager) {
+        presenceManager.broadcastToAll({
+          type: "pending_user",
+          user: { id: userId, login: cleanLogin, firstName: cleanFirstName },
+        });
+      }
     }
 
     return NextResponse.json({

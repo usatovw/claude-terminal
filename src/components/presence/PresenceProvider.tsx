@@ -53,6 +53,7 @@ interface PresenceContextValue {
   sendChatClose: () => void;
   joinSession: (sessionId: string) => void;
   connected: boolean;
+  onPendingUser: (callback: () => void) => void;
 }
 
 const PresenceContext = createContext<PresenceContextValue | null>(null);
@@ -95,6 +96,11 @@ export default function PresenceProvider({ children }: { children: React.ReactNo
   const [sessionPeers, setSessionPeers] = useState<Record<string, Peer[]>>({});
   const [globalChatMessages, setGlobalChatMessages] = useState<GlobalChatMessage[]>([]);
   const [connected, setConnected] = useState(false);
+  const pendingUserCallbackRef = useRef<(() => void) | null>(null);
+
+  const onPendingUser = useCallback((callback: () => void) => {
+    pendingUserCallbackRef.current = callback;
+  }, []);
 
   const connect = useCallback(async () => {
     try {
@@ -216,6 +222,12 @@ export default function PresenceProvider({ children }: { children: React.ReactNo
             case "session_peers":
               setSessionPeers(msg.sessions);
               break;
+
+            case "pending_user":
+              if (pendingUserCallbackRef.current) {
+                pendingUserCallbackRef.current();
+              }
+              break;
           }
         } catch {}
       };
@@ -286,6 +298,7 @@ export default function PresenceProvider({ children }: { children: React.ReactNo
         sendChatClose,
         joinSession,
         connected,
+        onPendingUser,
       }}
     >
       {children}

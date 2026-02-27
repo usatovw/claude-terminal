@@ -7,7 +7,8 @@ Self-hosted web interface for [Claude Code CLI](https://docs.anthropic.com/en/do
 ## Features
 
 - **Full terminal in the browser** — xterm.js connected to real Claude CLI via WebSocket + node-pty
-- **Multi-user auth** — registration with admin email approval, guest access via code, role-based permissions (admin / user / guest)
+- **Multi-user auth** — registration with admin approval (via panel or email), guest access via code, role-based permissions (admin / user / guest)
+- **Admin panel** — manage users, approve/reject registrations, change roles — no SMTP required
 - **Global chat** — persistent messages with markdown, file/image attachments, media gallery, real-time delivery via WebSocket
 - **Multi-session** — create, stop, resume, rename, delete sessions with loading states
 - **File manager** — browse, download, rename, delete files in session directories; recursive search; bulk zip-download
@@ -16,13 +17,24 @@ Self-hosted web interface for [Claude Code CLI](https://docs.anthropic.com/en/do
 - **Mobile-first** — adaptive layout throughout: sidebar drawer, touch-friendly targets, chat overlay
 - **404 page** — Aceternity Lamp effect, because even errors should look good
 
-## Requirements
+## Prerequisites
 
-- **VPS/server** with Linux (Ubuntu 22+ recommended)
+- **Linux** (Ubuntu 22+ recommended)
 - **Node.js 18+**
-- **Claude CLI** installed and authenticated (`npm install -g @anthropic-ai/claude-code`, then `claude` to login)
+- **build-essential** + **python3** (for native modules: node-pty, better-sqlite3)
+  ```bash
+  sudo apt install -y build-essential python3
+  ```
+- **Xvfb** + **xclip** (optional, for image clipboard bridge)
+  ```bash
+  sudo apt install -y xvfb xclip
+  ```
+- **Claude CLI** installed and authenticated
+  ```bash
+  npm install -g @anthropic-ai/claude-code
+  claude  # run once to authenticate
+  ```
 - **Active Anthropic subscription** (Claude Pro / Max / Team)
-- **Domain + SSL** (for secure clipboard access in the browser)
 
 ## Quick Start
 
@@ -34,102 +46,40 @@ cd claude-terminal
 npm install
 ```
 
-### 2. Configure environment
+### 2. Run setup wizard
 
 ```bash
-cp .env.example .env.local
+node setup.js
 ```
 
-Generate secrets:
+The wizard will:
+- Check system dependencies (Node.js, python3, Xvfb, xclip, Claude CLI)
+- Create admin account (login + password)
+- Configure deployment (domain or localhost)
+- Optionally set up SMTP for email notifications
+- Optionally enable guest access
+- Generate `.env.local` with all secrets
+- Seed admin user in database
 
-```bash
-# Generate JWT secret
-node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
-```
-
-Edit `.env.local`:
-
-```env
-JWT_SECRET=paste_your_64_byte_hex_here
-SESSION_TIMEOUT_HOURS=24
-GUEST_ACCESS_CODE=your_secret_guest_code
-ADMIN_EMAIL=admin@example.com
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your_email@gmail.com
-SMTP_PASS=your_app_password
-APP_URL=https://your-domain.com
-```
-
-### 3. Create admin user
-
-```bash
-# Generate password hash
-node -e "require('bcryptjs').hash('your_password', 10).then(console.log)"
-
-# Insert admin into DB (run after first server start creates the DB)
-node -e "
-const db = require('./db');
-db.prepare(\"INSERT INTO users (login, password_hash, first_name, role, status, color_index) VALUES (?, 'PASTE_HASH_HERE', 'Admin', 'admin', 'approved', 0)\").run('your_login');
-"
-```
-
-### 4. Build
+### 3. Build and run
 
 ```bash
 npm run build
+npm run start
 ```
 
-### 5. Set up Xvfb (for image clipboard bridge)
+### 4. Open in browser
 
-Claude CLI reads images from X11 clipboard. Since the server is headless, we need a virtual display:
+Go to the URL from setup (e.g. `https://your-domain.com` or `http://localhost:3000`), login with admin credentials from step 2.
+
+New users can register — approve them via the admin panel (Users icon in the top bar) or via CLI:
 
 ```bash
-# Install
-sudo apt install -y xvfb xclip
-
-# Start virtual display
-Xvfb :99 -screen 0 1024x768x24 &
+node approve.js list              # List pending users
+node approve.js approve <login>   # Approve a user
 ```
 
-<details>
-<summary>Systemd service for Xvfb (recommended)</summary>
-
-```bash
-sudo tee /etc/systemd/system/xvfb.service << 'EOF'
-[Unit]
-Description=Virtual Framebuffer
-After=network.target
-
-[Service]
-ExecStart=/usr/bin/Xvfb :99 -screen 0 1024x768x24
-Restart=always
-User=root
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-sudo systemctl enable --now xvfb
-```
-
-</details>
-
-### 6. Run with PM2
-
-```bash
-# Install PM2
-npm install -g pm2
-
-# Start
-pm2 start ecosystem.config.js
-
-# Auto-start on reboot
-pm2 save
-pm2 startup
-```
-
-### 7. Nginx reverse proxy
+### 5. Nginx reverse proxy (production)
 
 The app runs on `127.0.0.1:3000`. Set up Nginx to proxy with WebSocket support:
 
@@ -170,11 +120,37 @@ sudo apt install certbot python3-certbot-nginx
 sudo certbot --nginx -d your-domain.com
 ```
 
-### 8. Open in browser
+### 6. Run with PM2 (recommended)
 
-Go to `https://your-domain.com`, login with your admin account, and start using Claude.
+```bash
+npm install -g pm2
+pm2 start ecosystem.config.js
+pm2 save
+pm2 startup
+```
 
-New users can register — you'll receive an approval email with one-click approve/reject buttons. Guests can enter with the secret access code (read-only chat).
+<details>
+<summary>Systemd service for Xvfb (recommended for production)</summary>
+
+```bash
+sudo tee /etc/systemd/system/xvfb.service << 'EOF'
+[Unit]
+Description=Virtual Framebuffer
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/Xvfb :99 -screen 0 1024x768x24
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl enable --now xvfb
+```
+
+</details>
 
 ## How it works
 
@@ -184,22 +160,69 @@ Browser (chat UI)  ←REST+WS──→ server.js ←────────→ 
 Browser (presence) ←WebSocket→ server.js ←────────→ PresenceManager (cursors, peers)
                                     ↑
                                Next.js API routes
-                               (auth, sessions, files, chat)
+                               (auth, sessions, files, chat, admin)
 ```
 
-1. **server.js** starts HTTP server with Next.js + WebSocket, loads `.env.local`, initializes SQLite DB
-2. Users register → admin receives email → approves/rejects via link
+1. **server.js** starts HTTP server with Next.js + WebSocket, loads `.env.local`, validates config, initializes SQLite DB
+2. Users register → admin approves via admin panel (or email if SMTP configured)
 3. On login, JWT token with user identity is issued (httpOnly cookie)
 4. Terminal sessions connect via WebSocket, PTY spawned by **terminal-manager.js**
 5. Chat messages stored in SQLite, broadcast to all peers via presence WebSocket
 6. Image paste uses X11 clipboard bridge (Xvfb + xclip on DISPLAY :99)
 7. File manager reads session directories via REST API
 
+## User management
+
+### Admin panel (web UI)
+
+Click the Users icon in the top bar (visible to admins only). From there you can:
+- Approve or reject pending registrations
+- Change user roles (admin / user)
+- Delete users
+
+### CLI tools
+
+```bash
+node approve.js list                         # List all users
+node approve.js approve <login>              # Approve a pending user
+node approve.js reject <login>               # Reject a user
+node approve.js create-admin <login> <pass>  # Create admin user (emergency)
+```
+
+### Email notifications (optional)
+
+If SMTP is configured in `.env.local`, registration notifications are sent to the admin email with one-click approve/reject links. Without SMTP, use the admin panel or CLI.
+
+## Health check
+
+```bash
+curl http://localhost:3000/api/health
+# {"status":"ok","uptime":12345.678}
+```
+
+## Updating
+
+```bash
+git pull
+npm install
+npm run build
+pm2 restart claude-terminal
+```
+
+## Backup
+
+Back up these files regularly:
+- `data/claude-terminal.db` — database (users, messages, attachment metadata)
+- `chat-uploads/` — uploaded files from chat
+- `.env.local` — configuration and secrets
+
 ## Project structure
 
 ```
 ├── server.js                    # HTTP + WebSocket entry point
 ├── db.js                        # SQLite init, schema, admin seed
+├── setup.js                     # Interactive setup wizard
+├── approve.js                   # CLI user management utility
 ├── chat-manager.js              # Persistent chat: messages, files, broadcast
 ├── terminal-manager.js          # PTY session lifecycle manager
 ├── presence-manager.js          # Cursor, ephemeral chat, peer tracking
@@ -210,16 +233,18 @@ Browser (presence) ←WebSocket→ server.js ←────────→ Pres
 │   ├── app/
 │   │   ├── page.tsx             # Login page (Aurora background)
 │   │   ├── not-found.tsx        # 404 page (Lamp effect)
-│   │   ├── dashboard/page.tsx   # Dashboard — sidebar + terminal + chat
+│   │   ├── dashboard/page.tsx   # Dashboard — sidebar + terminal + chat + admin
 │   │   └── api/
 │   │       ├── auth/            # Login, register, approve, guest, logout, ws-token
+│   │       ├── admin/           # User management (admin only)
 │   │       ├── chat/            # Messages (CRUD), uploads (serve), media (gallery)
 │   │       └── sessions/        # Session CRUD + file operations
 │   ├── components/
 │   │   ├── LoginForm.tsx        # Three modes: login / register / guest
 │   │   ├── Terminal.tsx         # xterm.js client + clipboard bridge
 │   │   ├── SessionList.tsx      # Session sidebar + logout button
-│   │   ├── Navbar.tsx           # Top bar with chat toggle
+│   │   ├── Navbar.tsx           # Top bar with admin + chat toggles
+│   │   ├── AdminPanel.tsx       # User management slide-over panel
 │   │   ├── chat/               # ChatPanel, ChatMessage, ChatInput, DateSeparator,
 │   │   │                       # MediaGallery, ImageLightbox
 │   │   ├── presence/           # PresenceProvider, CursorOverlay, Cursor, EdgeIndicator, Avatars
@@ -238,28 +263,51 @@ Browser (presence) ←WebSocket→ server.js ←────────→ Pres
 
 See [CLAUDE.md](CLAUDE.md) for detailed architecture documentation.
 
-## Updating
+## Troubleshooting
 
-```bash
-git pull
-npm install
-npm run build
-pm2 restart claude-terminal
-```
+### "Run: node setup.js" on server start
+The server requires `.env.local` to exist. Run `node setup.js` to create it.
 
-## Security notes
+### "FATAL: JWT_SECRET is missing or too short"
+Your `.env.local` is missing `JWT_SECRET` or it's shorter than 32 characters. Re-run `node setup.js` or add it manually.
 
-- All secrets in `.env.local` (gitignored, never committed)
+### Image paste doesn't work
+Make sure Xvfb and xclip are installed and Xvfb is running on display :99. The server will show warnings on startup if these are missing.
+
+### Registration stuck in "pending"
+Without SMTP configured, users must be approved manually:
+- Via the admin panel (Users icon in the top bar)
+- Via CLI: `node approve.js approve <login>`
+
+### Native modules fail to build (node-pty, better-sqlite3)
+Install build dependencies: `sudo apt install -y build-essential python3`
+
+### Cannot connect from other devices
+By default the server listens on `127.0.0.1`. For direct access (without Nginx), set `HOST=0.0.0.0` in `.env.local` (the setup wizard does this automatically for domain deployments).
+
+## Security
+
+- `.env.local` contains JWT_SECRET and SMTP passwords — **never commit to git**
+- `data/` contains the database with password hashes — **never commit to git**
+- `chat-uploads/` contains user files — **never commit to git**
+- All of the above are in `.gitignore` and will not be included in forks/clones
 - Passwords stored as bcrypt hashes (one-way)
 - JWT tokens carry user identity, expire after configured hours
 - Login rate-limited to 5 attempts per 15 minutes per IP
+- Registration rate-limited to 5 attempts per 15 minutes per IP
 - WebSocket connections require valid short-lived JWT (30s)
 - Cookies: httpOnly + secure + SameSite=strict in production
-- Server listens on 127.0.0.1 only (not exposed directly)
+- Server listens on 127.0.0.1 only by default (not exposed directly)
 - File API sandboxed to session directories (path traversal protection)
 - Chat uploads validated by MIME type and size (50MB max)
 - Registration requires admin approval — no self-service access
 - Guest access requires secret code, read-only in chat
+- Graceful shutdown on SIGTERM/SIGINT — PTY processes killed, DB closed
+
+## Known limitations
+
+- Rate limiting is stored in-memory — resets on server restart
+- No database migration system — schema changes require manual ALTER TABLE or DB recreation
 
 ## License
 

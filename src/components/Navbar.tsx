@@ -1,6 +1,6 @@
 "use client";
 
-import { Wifi, WifiOff, Menu, ChevronLeft, ChevronRight, TerminalIcon, FolderIcon, MessageCircle } from "@/components/Icons";
+import { Wifi, WifiOff, Menu, ChevronLeft, ChevronRight, TerminalIcon, FolderIcon, MessageCircle, UsersIcon } from "@/components/Icons";
 import { getProviderIcon } from "@/lib/provider-icons";
 
 export type ViewMode = "terminal" | "files";
@@ -18,6 +18,10 @@ interface NavbarProps {
   onSwitchView?: (mode: ViewMode) => void;
   chatOpen?: boolean;
   onToggleChat?: () => void;
+  isAdmin?: boolean;
+  pendingCount?: number;
+  adminOpen?: boolean;
+  onToggleAdmin?: () => void;
 }
 
 export default function Navbar({
@@ -33,6 +37,10 @@ export default function Navbar({
   onSwitchView,
   chatOpen,
   onToggleChat,
+  isAdmin,
+  pendingCount,
+  adminOpen,
+  onToggleAdmin,
 }: NavbarProps) {
   const ProvIcon = providerSlug ? getProviderIcon(providerSlug) : null;
 
@@ -119,6 +127,26 @@ export default function Navbar({
               <WifiOff className="w-4 h-4 md:w-3.5 md:h-3.5 text-muted-fg" />
             )}
           </div>
+        )}
+
+        {/* Admin panel toggle — admin only */}
+        {isAdmin && onToggleAdmin && (
+          <button
+            onClick={onToggleAdmin}
+            className={`relative p-2 md:p-1.5 rounded-md transition-all cursor-pointer ${
+              adminOpen
+                ? "border border-accent bg-accent-hover text-accent-fg"
+                : "text-muted-fg hover:text-foreground border border-transparent"
+            }`}
+            title="Пользователи"
+          >
+            <UsersIcon className="w-5 h-5 md:w-4 md:h-4" />
+            {!!pendingCount && pendingCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 flex items-center justify-center px-1 text-[10px] font-bold bg-amber-500 text-white rounded-full">
+                {pendingCount}
+              </span>
+            )}
+          </button>
         )}
 
         {/* Chat toggle button */}

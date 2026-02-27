@@ -1,6 +1,7 @@
 const Database = require("better-sqlite3");
 const path = require("path");
 const fs = require("fs");
+const { execSync } = require("child_process");
 
 const DATA_DIR = path.join(__dirname, "data");
 if (!fs.existsSync(DATA_DIR)) {
@@ -87,11 +88,21 @@ function seedAdmin() {
 
 seedAdmin();
 
+// Auto-detect Claude CLI path
+function findClaude() {
+  try {
+    return execSync("which claude", { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }).trim();
+  } catch {
+    return "/usr/bin/claude";
+  }
+}
+
 // Seed built-in CLI providers
 function seedProviders() {
+  const claudePath = findClaude();
   const builtins = [
     { slug: "terminal", name: "Terminal", command: "/bin/bash", resume_command: null, icon: "terminal", color: "#52525b", sort_order: 1 },
-    { slug: "claude", name: "Claude", command: "/usr/bin/claude", resume_command: "/usr/bin/claude --continue", icon: "claude", color: "#d4a574", sort_order: 2 },
+    { slug: "claude", name: "Claude", command: claudePath, resume_command: `${claudePath} --continue`, icon: "claude", color: "#d4a574", sort_order: 2 },
   ];
 
   const insert = db.prepare(

@@ -15,7 +15,21 @@ if (fs.existsSync(envPath)) {
     val = val.replace(/\\\$/g, "$");
     if (!process.env[key]) process.env[key] = val;
   }
+} else {
+  console.error("\n  ERROR: .env.local not found.");
+  console.error("  Run: node setup.js\n");
+  process.exit(1);
 }
+
+// ── Startup validation ──
+(function validateStartup() {
+  const secret = process.env.JWT_SECRET;
+  if (!secret || secret.length < 32) {
+    console.error("\n  FATAL: JWT_SECRET is missing or too short (need 32+ characters).");
+    console.error("  Run: node setup.js\n");
+    process.exit(1);
+  }
+})();
 
 const { createServer } = require("http");
 const { parse } = require("url");
@@ -26,30 +40,59 @@ const { execSync, spawn } = require("child_process");
 
 // ── Ensure Xvfb is running on :99 (needed for xclip clipboard bridge) ──
 (function ensureXvfb() {
+  try {
+    // Check if Xvfb binary exists
+    execSync("which Xvfb", { stdio: ["pipe", "pipe", "pipe"] });
+  } catch {
+    console.warn("> WARNING: Xvfb not found — image clipboard bridge will not work");
+    return;
+  }
+
   // Check via X11 lock file — reliable and doesn't false-match shell wrappers
   if (fs.existsSync("/tmp/.X99-lock")) {
     console.log("> Xvfb :99 already running (lock file exists)");
     return;
   }
-  console.log("> Starting Xvfb on :99...");
-  const xvfb = spawn("Xvfb", [":99", "-screen", "0", "1024x768x24"], {
-    stdio: "ignore",
-    detached: true,
-  });
-  xvfb.unref();
-  // Give it a moment to create the lock file
-  execSync("sleep 0.5");
-  console.log("> Xvfb started (PID:", xvfb.pid + ")");
+
+  try {
+    console.log("> Starting Xvfb on :99...");
+    const xvfb = spawn("Xvfb", [":99", "-screen", "0", "1024x768x24"], {
+      stdio: "ignore",
+      detached: true,
+    });
+    xvfb.unref();
+    // Give it a moment to create the lock file
+    execSync("sleep 0.5");
+    console.log("> Xvfb started (PID:", xvfb.pid + ")");
+  } catch (err) {
+    console.warn("> WARNING: Failed to start Xvfb:", err.message);
+  }
 })();
+
+// Check for xclip
+try {
+  execSync("which xclip", { stdio: ["pipe", "pipe", "pipe"] });
+} catch {
+  console.warn("> WARNING: xclip not found — image clipboard bridge will not work");
+}
 
 const db = require("./db");
 global.db = db;
+
+// Check for admin users
+const adminCount = db.prepare(
+  "SELECT COUNT(*) as c FROM users WHERE role='admin' AND status='approved'"
+).get().c;
+if (adminCount === 0) {
+  console.warn("> WARNING: No admin users found. Run: node setup.js");
+}
+
 const { TerminalManager } = require("./terminal-manager");
 const { PresenceManager } = require("./presence-manager");
 const { ChatManager } = require("./chat-manager");
 
 const dev = process.env.NODE_ENV !== "production";
-const hostname = "127.0.0.1";
+const hostname = process.env.HOST || "127.0.0.1";
 const port = parseInt(process.env.PORT || "3000", 10);
 
 const app = next({ dev, hostname, port });
@@ -77,6 +120,13 @@ app.prepare().then(() => {
   global.chatManager = chatManager;
 
   const server = createServer((req, res) => {
+    // Health check — before Next.js handler
+    if (req.url === "/api/health") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ status: "ok", uptime: process.uptime() }));
+      return;
+    }
+
     const parsedUrl = parse(req.url, true);
     handle(req, res, parsedUrl);
   });
@@ -178,4 +228,37 @@ app.prepare().then(() => {
     console.log(`> Ready on http://${hostname}:${port}`);
     console.log(`> Environment: ${dev ? "development" : "production"}`);
   });
+
+  // ── Graceful shutdown ──
+  function gracefulShutdown(signal) {
+    console.log(`\n> Received ${signal}, shutting down...`);
+
+    // 1. Kill all PTY processes
+    for (const [, session] of terminalManager.sessions) {
+      if (!session.exited && session.pty) {
+        try { session.pty.kill(); } catch {}
+      }
+    }
+
+    // 2. Close WebSocket servers
+    wss.close();
+    wssPresence.close();
+
+    // 3. Close HTTP server
+    server.close(() => {
+      // 4. Close database
+      try { db.close(); } catch {}
+      console.log("> Shutdown complete");
+      process.exit(0);
+    });
+
+    // Force exit after 10s
+    setTimeout(() => {
+      console.error("> Forced shutdown after timeout");
+      process.exit(1);
+    }, 10000);
+  }
+
+  process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+  process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 });

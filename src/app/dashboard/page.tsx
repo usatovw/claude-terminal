@@ -18,11 +18,12 @@ import ProviderWizardModal from "@/components/ProviderWizardModal";
 import ProviderConfigModal from "@/components/ProviderConfigModal";
 import PresenceProvider, { usePresence } from "@/components/presence/PresenceProvider";
 import CursorOverlay from "@/components/presence/CursorOverlay";
-import { UserProvider } from "@/lib/UserContext";
+import { UserProvider, useUser } from "@/lib/UserContext";
 import { ThemeProvider } from "@/lib/ThemeContext";
 import { useTheme } from "@/lib/ThemeContext";
 import { themeConfigs } from "@/lib/theme-config";
 import ChatPanel from "@/components/chat/ChatPanel";
+import AdminPanel from "@/components/AdminPanel";
 import ImageLightbox from "@/components/chat/ImageLightbox";
 import { TerminalScrollProvider } from "@/lib/TerminalScrollContext";
 import { ProviderProvider, useProviders, type Provider } from "@/lib/ProviderContext";
@@ -56,7 +57,7 @@ function DashboardInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialFile = searchParams.get("file");
-  const { joinSession: presenceJoin } = usePresence();
+  const { joinSession: presenceJoin, onPendingUser } = usePresence();
   const { theme, toggleTheme } = useTheme();
   const { providers, refetch: refetchProviders } = useProviders();
   const contentRef = useRef<HTMLDivElement>(null);
@@ -74,7 +75,34 @@ function DashboardInner() {
   const [resumingSessionId, setResumingSessionId] = useState<string | null>(null);
   const [creatingSession, setCreatingSession] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const { user } = useUser();
+  const isAdmin = user?.role === "admin";
+
+  // Fetch pending count for admin
+  useEffect(() => {
+    if (!isAdmin) return;
+    const fetchPending = async () => {
+      try {
+        const res = await fetch("/api/admin/users");
+        if (res.ok) {
+          const data = await res.json();
+          setPendingCount(data.users.filter((u: { status: string }) => u.status === "pending").length);
+        }
+      } catch {}
+    };
+    fetchPending();
+  }, [isAdmin]);
+
+  // Listen for pending_user WS events to update badge
+  useEffect(() => {
+    if (!isAdmin) return;
+    onPendingUser(() => {
+      setPendingCount((c) => c + 1);
+    });
+  }, [isAdmin, onPendingUser]);
 
   // Welcome screen combo button state
   const [welcomeSelectedSlug, setWelcomeSelectedSlug] = useState<string>(() => {
@@ -383,6 +411,10 @@ function DashboardInner() {
             onSwitchView={handleSwitchView}
             chatOpen={chatOpen}
             onToggleChat={() => setChatOpen(!chatOpen)}
+            isAdmin={isAdmin}
+            pendingCount={pendingCount}
+            adminOpen={adminOpen}
+            onToggleAdmin={() => setAdminOpen(!adminOpen)}
           />
         )}
 
@@ -499,6 +531,44 @@ function DashboardInner() {
               </div>
             </div>
           )}
+
+          {/* Admin panel — right overlay */}
+          <AnimatePresence>
+            {adminOpen && isAdmin && (
+              <>
+                {/* Mobile backdrop */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="fixed inset-0 bg-black/60 z-40 md:hidden"
+                  onClick={() => setAdminOpen(false)}
+                />
+                {/* Panel */}
+                <motion.div
+                  initial={{ x: "100%" }}
+                  animate={{ x: 0 }}
+                  exit={{ x: "100%" }}
+                  transition={{ type: "spring", damping: 30, stiffness: 300 }}
+                  className="fixed md:absolute top-0 right-0 bottom-0 w-full sm:w-80 md:w-96 z-50 md:z-20 bg-surface border-l border-border"
+                >
+                  {/* Close button — mobile */}
+                  <div className="absolute top-2 right-2 z-10 md:hidden">
+                    <button
+                      onClick={() => setAdminOpen(false)}
+                      className="p-2 text-muted-fg hover:text-foreground transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <AdminPanel
+                    onPendingCountChange={setPendingCount}
+                  />
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
 
           {/* Chat panel — right overlay */}
           <AnimatePresence>

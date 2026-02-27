@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { useRouter } from "next/navigation";
 import Breadcrumbs from "@/components/file-manager/Breadcrumbs";
 import FileToolbar, { SortField, SortDirection } from "@/components/file-manager/FileToolbar";
 import FileList from "@/components/file-manager/FileList";
 import DeleteConfirmModal from "@/components/file-manager/DeleteConfirmModal";
+import MarkdownViewer from "@/components/file-manager/MarkdownViewer";
 import { FileEntry } from "@/components/file-manager/FileItem";
 import { useIsMobile } from "@/lib/useIsMobile";
 
@@ -12,9 +14,11 @@ const MOBILE_COLUMNS = "32px 28px 1fr 80px";
 
 interface FileManagerProps {
   sessionId: string;
+  initialFile?: string | null;
 }
 
-export default function FileManager({ sessionId }: FileManagerProps) {
+export default function FileManager({ sessionId, initialFile }: FileManagerProps) {
+  const router = useRouter();
   const [currentPath, setCurrentPath] = useState(".");
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,9 +32,24 @@ export default function FileManager({ sessionId }: FileManagerProps) {
   const [columnWidths, setColumnWidths] = useState("32px 28px 1fr 100px 140px 80px");
   const isMobile = useIsMobile();
   const effectiveColumns = isMobile ? MOBILE_COLUMNS : columnWidths;
+  const [fileStack, setFileStack] = useState<{ path: string; name: string }[]>(() => {
+    if (initialFile) {
+      const name = initialFile.split("/").pop() || initialFile;
+      return [{ path: initialFile, name }];
+    }
+    return [];
+  });
   const [searchResults, setSearchResults] = useState<FileEntry[] | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clear ?file= param from URL after consuming it
+  useEffect(() => {
+    if (initialFile) {
+      router.replace("/dashboard", { scroll: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const fetchEntries = useCallback(async () => {
     setLoading(true);
@@ -315,6 +334,26 @@ export default function FileManager({ sessionId }: FileManagerProps) {
     setDeleteConfirm([name]);
   }, []);
 
+  const handleOpenFile = useCallback(
+    (nameOrPath: string) => {
+      const p = searchResults ? nameOrPath : fullPath(nameOrPath);
+      const name = nameOrPath.split("/").pop() || nameOrPath;
+      setFileStack([{ path: p, name }]);
+    },
+    [currentPath, searchResults]
+  );
+
+  const handleFileNavigate = useCallback((path: string, name: string) => {
+    setFileStack((prev) => [...prev, { path, name }]);
+  }, []);
+
+  const handleFileClose = useCallback(() => {
+    setFileStack((prev) => {
+      if (prev.length <= 1) return [];
+      return prev.slice(0, -1);
+    });
+  }, []);
+
   const handleDeleteSelected = useCallback(() => {
     setDeleteConfirm([...selectedPaths]);
   }, [selectedPaths]);
@@ -339,6 +378,20 @@ export default function FileManager({ sessionId }: FileManagerProps) {
     }
     setDeleteConfirm(null);
   }, [deleteConfirm, sessionId, currentPath, fetchEntries]);
+
+  const viewingFile = fileStack.length > 0 ? fileStack[fileStack.length - 1] : null;
+
+  if (viewingFile) {
+    return (
+      <MarkdownViewer
+        sessionId={sessionId}
+        filePath={viewingFile.path}
+        fileName={viewingFile.name}
+        onClose={handleFileClose}
+        onNavigate={handleFileNavigate}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col w-full h-full bg-background rounded-xl overflow-hidden">
@@ -367,6 +420,7 @@ export default function FileManager({ sessionId }: FileManagerProps) {
           onCheckboxChange={handleCheckboxChange}
           onNavigate={handleNavigate}
           onDownload={handleDownload}
+          onOpenFile={handleOpenFile}
           onRenameStart={handleRenameStart}
           onRenameChange={setRenameName}
           onRenameSubmit={handleRenameSubmit}

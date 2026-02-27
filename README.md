@@ -29,7 +29,7 @@ Self-hosted web interface for [Claude Code CLI](https://docs.anthropic.com/en/do
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/claude-terminal.git
+git clone https://github.com/usatovw/claude-terminal.git
 cd claude-terminal
 npm install
 ```

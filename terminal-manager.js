@@ -3,19 +3,26 @@ const fs = require("fs");
 const path = require("path");
 const { execSync, spawn } = require("child_process");
 
+// Allowlist of safe env vars for PTY sessions.
+// NEVER spread process.env — it leaks JWT_SECRET, SMTP_PASS, etc.
+const SAFE_ENV_KEYS = [
+  "HOME", "USER", "LOGNAME", "SHELL", "PATH",
+  "LANG", "LC_ALL", "LC_CTYPE", "LANGUAGE",
+  "EDITOR", "VISUAL", "PAGER",
+  "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_RUNTIME_DIR",
+  "HOSTNAME", "TMPDIR", "TZ",
+];
+
 const PTY_ENV = {
-  ...process.env,
   TERM: "xterm-256color",
   COLORTERM: "truecolor",
   CLAUDECODE: "",
   DISPLAY: ":99",
 };
 
-// Remove SSH env vars so Claude CLI doesn't think it's in SSH
-delete PTY_ENV.SSH_CLIENT;
-delete PTY_ENV.SSH_CONNECTION;
-delete PTY_ENV.SSH_TTY;
-delete PTY_ENV.SSH_AUTH_SOCK;
+for (const key of SAFE_ENV_KEYS) {
+  if (process.env[key]) PTY_ENV[key] = process.env[key];
+}
 
 const DATA_DIR = path.join(process.env.HOME || "/root", "projects", "Claude");
 const SESSIONS_FILE = path.join(DATA_DIR, ".sessions.json");

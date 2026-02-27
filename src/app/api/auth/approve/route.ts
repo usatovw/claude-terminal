@@ -64,9 +64,8 @@ export async function GET(request: NextRequest) {
     return htmlResponse("Уже обработано", `Пользователь ${user.first_name} ${statusText}.`, false);
   }
 
-  // Determine action from query param (fallback to token payload)
-  const effectiveAction = action === "approve" || action === "reject" ? action : payload.action;
-  const newStatus = effectiveAction === "approve" ? "approved" : "rejected";
+  // Use action from signed JWT payload only (ignore query param to prevent tampering)
+  const newStatus = payload.action === "approve" ? "approved" : "rejected";
 
   db.prepare("UPDATE users SET status = ? WHERE id = ?").run(newStatus, payload.userId);
 

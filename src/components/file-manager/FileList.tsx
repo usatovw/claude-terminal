@@ -20,6 +20,7 @@ interface FileListProps {
   onRenameSubmit: () => void;
   onRenameCancel: () => void;
   onDelete: (name: string) => void;
+  onOpenFile?: (nameOrPath: string) => void;
   loading: boolean;
   sortBy: SortField;
   sortDir: SortDirection;
@@ -47,6 +48,7 @@ export default function FileList({
   onRenameSubmit,
   onRenameCancel,
   onDelete,
+  onOpenFile,
   loading,
   sortBy,
   sortDir,
@@ -123,6 +125,7 @@ export default function FileList({
                 onRenameSubmit={onRenameSubmit}
                 onRenameCancel={onRenameCancel}
                 onDelete={() => onDelete(entry.name)}
+                onOpenFile={onOpenFile ? () => onOpenFile(entry.relativePath || entry.name) : undefined}
               />
             ))}
           </AnimatePresence>

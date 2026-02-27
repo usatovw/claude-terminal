@@ -30,6 +30,7 @@ interface FileItemProps {
   onRenameSubmit: () => void;
   onRenameCancel: () => void;
   onDelete: () => void;
+  onOpenFile?: () => void;
 }
 
 export default function FileItem({
@@ -48,6 +49,7 @@ export default function FileItem({
   onRenameSubmit,
   onRenameCancel,
   onDelete,
+  onOpenFile,
 }: FileItemProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -74,6 +76,8 @@ export default function FileItem({
     if (isRenaming) return;
     if (entry.type === "directory") {
       onNavigate();
+    } else if (entry.extension === "md" && onOpenFile) {
+      onOpenFile();
     } else {
       onDownload();
     }

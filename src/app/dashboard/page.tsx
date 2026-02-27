@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, Suspense } from "react";
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import Navbar, { ViewMode } from "@/components/Navbar";
 import SessionList from "@/components/SessionList";
@@ -38,20 +38,24 @@ const Terminal = dynamic(() => import("@/components/Terminal"), {
 
 export default function Dashboard() {
   return (
-    <ThemeProvider>
-      <UserProvider>
-        <PresenceProvider>
-          <ProviderProvider>
-            <DashboardInner />
-          </ProviderProvider>
-        </PresenceProvider>
-      </UserProvider>
-    </ThemeProvider>
+    <Suspense>
+      <ThemeProvider>
+        <UserProvider>
+          <PresenceProvider>
+            <ProviderProvider>
+              <DashboardInner />
+            </ProviderProvider>
+          </PresenceProvider>
+        </UserProvider>
+      </ThemeProvider>
+    </Suspense>
   );
 }
 
 function DashboardInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialFile = searchParams.get("file");
   const { joinSession: presenceJoin } = usePresence();
   const { theme, toggleTheme } = useTheme();
   const { providers, refetch: refetchProviders } = useProviders();
@@ -66,7 +70,7 @@ function DashboardInner() {
     "connected" | "disconnected" | "idle"
   >("idle");
   const [sessions, setSessions] = useState<Array<{sessionId: string; displayName: string | null; isActive: boolean; providerSlug: string}>>([]);
-  const [viewMode, setViewMode] = useState<ViewMode>("terminal");
+  const [viewMode, setViewMode] = useState<ViewMode>(initialFile ? "files" : "terminal");
   const [resumingSessionId, setResumingSessionId] = useState<string | null>(null);
   const [creatingSession, setCreatingSession] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
@@ -110,6 +114,17 @@ function DashboardInner() {
     const interval = setInterval(fetchSessions, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  // Auto-select session when arriving via ?file= param
+  useEffect(() => {
+    if (initialFile && !activeSessionId && sessions.length > 0) {
+      // Pick the most recent session
+      const target = sessions[0];
+      if (target) {
+        setActiveSessionId(target.sessionId);
+      }
+    }
+  }, [initialFile, activeSessionId, sessions]);
 
   // Warn before closing tab with active session
   useEffect(() => {
@@ -374,61 +389,65 @@ function DashboardInner() {
         {/* Content area */}
         <div className="flex-1 relative">
           {activeSessionId ? (
-            viewMode === "files" ? (
-              /* File Manager */
-              <div className="absolute inset-0 m-1 md:m-2">
+            <>
+              {/* File Manager — always mounted, hidden when not active */}
+              <div className={`absolute inset-0 m-1 md:m-2 ${viewMode === "files" ? "" : "hidden"}`}>
                 <div className="w-full h-full rounded-xl border border-accent/20 bg-surface-alt overflow-hidden">
-                  <FileManager sessionId={activeSessionId} />
+                  <FileManager sessionId={activeSessionId} initialFile={initialFile} />
                 </div>
               </div>
-            ) : isActiveSessionStopped ? (
-              /* Stopped session overlay */
-              <div className="absolute inset-0 m-1 md:m-2">
-                <div className="w-full h-full rounded-xl border border-accent/20 bg-surface-alt overflow-hidden">
-                  <StoppedSessionOverlay
-                    sessionName={activeSessionName || activeSessionId}
-                    onResume={handleResumeSession}
-                    resuming={resumingSessionId === activeSessionId}
-                  />
-                </div>
-              </div>
-            ) : (
-              /* Terminal — presence system lives here ONLY */
-              <TerminalScrollProvider>
-                <div
-                  ref={contentRef}
-                  className={`absolute inset-0 ${fullscreen ? "m-0" : "m-1 md:m-2"} presence-active`}
-                >
-                  <CursorOverlay />
-                  {/* Fullscreen toggle */}
-                  <button
-                    onClick={() => setFullscreen(!fullscreen)}
-                    className="absolute top-2 right-2 z-10 p-2 md:p-1.5 text-muted hover:text-foreground transition-colors bg-surface-alt/80 rounded-md backdrop-blur-sm"
-                    title={fullscreen ? "Выйти из полноэкранного" : "Полноэкранный режим"}
-                  >
-                    {fullscreen ? (
-                      <Minimize className="w-5 h-5 md:w-4 md:h-4" />
-                    ) : (
-                      <Maximize className="w-5 h-5 md:w-4 md:h-4" />
-                    )}
-                  </button>
 
-                  <div className="w-full h-full rounded-xl border border-border bg-surface-alt overflow-hidden p-1">
-                    <div
-                      className="w-full h-full rounded-lg overflow-hidden"
-                      style={{ backgroundColor: themeConfigs[theme].terminal.background }}
-                    >
-                      <Terminal
-                        key={terminalKey}
-                        sessionId={activeSessionId}
-                        fullscreen={fullscreen}
-                        onConnectionChange={handleConnectionChange}
+              {viewMode !== "files" && (
+                isActiveSessionStopped ? (
+                  /* Stopped session overlay */
+                  <div className="absolute inset-0 m-1 md:m-2">
+                    <div className="w-full h-full rounded-xl border border-accent/20 bg-surface-alt overflow-hidden">
+                      <StoppedSessionOverlay
+                        sessionName={activeSessionName || activeSessionId}
+                        onResume={handleResumeSession}
+                        resuming={resumingSessionId === activeSessionId}
                       />
                     </div>
                   </div>
-                </div>
-              </TerminalScrollProvider>
-            )
+                ) : (
+                  /* Terminal — presence system lives here ONLY */
+                  <TerminalScrollProvider>
+                    <div
+                      ref={contentRef}
+                      className={`absolute inset-0 ${fullscreen ? "m-0" : "m-1 md:m-2"} presence-active`}
+                    >
+                      <CursorOverlay />
+                      {/* Fullscreen toggle */}
+                      <button
+                        onClick={() => setFullscreen(!fullscreen)}
+                        className="absolute top-2 right-2 z-10 p-2 md:p-1.5 text-muted hover:text-foreground transition-colors bg-surface-alt/80 rounded-md backdrop-blur-sm"
+                        title={fullscreen ? "Выйти из полноэкранного" : "Полноэкранный режим"}
+                      >
+                        {fullscreen ? (
+                          <Minimize className="w-5 h-5 md:w-4 md:h-4" />
+                        ) : (
+                          <Maximize className="w-5 h-5 md:w-4 md:h-4" />
+                        )}
+                      </button>
+
+                      <div className="w-full h-full rounded-xl border border-border bg-surface-alt overflow-hidden p-1">
+                        <div
+                          className="w-full h-full rounded-lg overflow-hidden"
+                          style={{ backgroundColor: themeConfigs[theme].terminal.background }}
+                        >
+                          <Terminal
+                            key={terminalKey}
+                            sessionId={activeSessionId}
+                            fullscreen={fullscreen}
+                            onConnectionChange={handleConnectionChange}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </TerminalScrollProvider>
+                )
+              )}
+            </>
           ) : (
             <div className="flex items-center justify-center h-full relative overflow-hidden px-4">
               {/* Spotlight background */}

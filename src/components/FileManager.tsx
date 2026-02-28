@@ -15,9 +15,10 @@ const MOBILE_COLUMNS = "32px 28px 1fr 80px";
 interface FileManagerProps {
   sessionId: string;
   initialFile?: string | null;
+  visible?: boolean;
 }
 
-export default function FileManager({ sessionId, initialFile }: FileManagerProps) {
+export default function FileManager({ sessionId, initialFile, visible = true }: FileManagerProps) {
   const router = useRouter();
   const [currentPath, setCurrentPath] = useState(".");
   const [entries, setEntries] = useState<FileEntry[]>([]);
@@ -51,8 +52,8 @@ export default function FileManager({ sessionId, initialFile }: FileManagerProps
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fetchEntries = useCallback(async () => {
-    setLoading(true);
+  const fetchEntries = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const res = await fetch(
         `/api/sessions/${sessionId}/files?path=${encodeURIComponent(currentPath)}`
@@ -66,16 +67,45 @@ export default function FileManager({ sessionId, initialFile }: FileManagerProps
     } catch {
       setEntries([]);
     }
-    setLoading(false);
+    if (!silent) setLoading(false);
   }, [sessionId, currentPath]);
 
+  // Fetch entries when path or session changes (no state resets here to avoid strobe)
+  const initialLoadDone = useRef(false);
   useEffect(() => {
-    fetchEntries();
-    setSelectedPaths(new Set());
-    setRenamingEntry(null);
-    setSearchQuery("");
-    setSearchResults(null);
+    fetchEntries(initialLoadDone.current);
+    initialLoadDone.current = true;
   }, [fetchEntries]);
+
+  // Full reset when session changes
+  const prevSessionIdRef = useRef(sessionId);
+  useEffect(() => {
+    if (prevSessionIdRef.current !== sessionId) {
+      prevSessionIdRef.current = sessionId;
+      setCurrentPath(".");
+      setFileStack([]);
+      setSelectedPaths(new Set());
+      setRenamingEntry(null);
+      setSearchQuery("");
+      setSearchResults(null);
+      initialLoadDone.current = false;
+    }
+  }, [sessionId]);
+
+  // Refresh on visibility change + poll while visible
+  const prevVisibleRef = useRef(visible);
+  useEffect(() => {
+    // Silent refresh when becoming visible
+    if (visible && !prevVisibleRef.current) {
+      fetchEntries(true);
+    }
+    prevVisibleRef.current = visible;
+
+    // Poll every 3s while visible (silent)
+    if (!visible) return;
+    const interval = setInterval(() => fetchEntries(true), 3000);
+    return () => clearInterval(interval);
+  }, [visible, fetchEntries]);
 
   // Debounced recursive search
   useEffect(() => {
@@ -157,6 +187,9 @@ export default function FileManager({ sessionId, initialFile }: FileManagerProps
 
   const handleNavigate = useCallback(
     (nameOrPath: string) => {
+      setSelectedPaths(new Set());
+      setRenamingEntry(null);
+
       // If in search mode, navigate to parent folder of the result
       if (searchResults) {
         const entry = searchResults.find((e) => (e.relativePath || e.name) === nameOrPath);
@@ -188,6 +221,8 @@ export default function FileManager({ sessionId, initialFile }: FileManagerProps
   );
 
   const handleBreadcrumbNavigate = useCallback((newPath: string) => {
+    setSelectedPaths(new Set());
+    setRenamingEntry(null);
     setCurrentPath(newPath);
   }, []);
 

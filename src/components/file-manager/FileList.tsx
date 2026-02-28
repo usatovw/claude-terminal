@@ -1,6 +1,5 @@
 "use client";
 
-import { AnimatePresence } from "motion/react";
 import FileItem, { FileEntry } from "./FileItem";
 import FileTableHeader from "./FileTableHeader";
 import { SortField, SortDirection } from "./FileToolbar";
@@ -106,7 +105,6 @@ export default function FileList({
         renderEmptyState()
       ) : (
         <div className="divide-y divide-border">
-          <AnimatePresence mode="popLayout">
             {entries.map((entry) => (
               <FileItem
                 key={entry.relativePath || entry.name}
@@ -128,7 +126,6 @@ export default function FileList({
                 onOpenFile={onOpenFile ? () => onOpenFile(entry.relativePath || entry.name) : undefined}
               />
             ))}
-          </AnimatePresence>
         </div>
       )}
     </div>

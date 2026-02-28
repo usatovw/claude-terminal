@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useEffect } from "react";
-import { motion } from "motion/react";
 import { FolderIcon, FileIcon, Download, Pencil, Trash, CheckSquare, Square } from "@/components/Icons";
 import { formatFileSize, relativeTime } from "@/lib/utils";
 
@@ -89,14 +88,10 @@ export default function FileItem({
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.1 }}
+    <div
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
-      className={`grid items-center px-2 md:px-4 py-2.5 md:py-2 transition-all duration-150 group cursor-pointer ${
+      className={`grid items-center px-2 md:px-4 py-2.5 md:py-2 transition-colors duration-150 group cursor-pointer ${
         isSelected
           ? "bg-gradient-to-r from-accent/10 to-indigo-500/10"
           : "hover:bg-surface-hover/50"
@@ -187,6 +182,6 @@ export default function FileItem({
           <Trash className="w-4 h-4 md:w-3.5 md:h-3.5" />
         </button>
       </div>
-    </motion.div>
+    </div>
   );
 }

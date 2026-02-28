@@ -425,7 +425,7 @@ function DashboardInner() {
               {/* File Manager — always mounted, hidden when not active */}
               <div className={`absolute inset-0 m-1 md:m-2 ${viewMode === "files" ? "" : "hidden"}`}>
                 <div className="w-full h-full rounded-xl border border-accent/20 bg-surface-alt overflow-hidden">
-                  <FileManager sessionId={activeSessionId} initialFile={initialFile} />
+                  <FileManager sessionId={activeSessionId} initialFile={initialFile} visible={viewMode === "files"} />
                 </div>
               </div>
 

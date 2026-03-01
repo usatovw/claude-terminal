@@ -52,3 +52,6 @@ next-env.d.ts
 
 # chat uploads
 /chat-uploads/
+
+# deploy lock
+.deploy.lock

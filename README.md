@@ -34,6 +34,10 @@ Self-hosted web interface for [Claude Code CLI](https://docs.anthropic.com/en/do
   ```bash
   sudo apt install -y xvfb xclip
   ```
+- **tmux** (for session persistence across deploys)
+  ```bash
+  sudo apt install -y tmux
+  ```
 - **Claude CLI** installed and authenticated
   ```bash
   npm install -g @anthropic-ai/claude-code
@@ -86,9 +90,19 @@ node approve.js approve <login>   # Approve a user
 
 ### 5. Nginx reverse proxy (production)
 
-The app runs on `127.0.0.1:3000`. Set up Nginx to proxy with WebSocket support:
+Set up Nginx with an upstream block for blue-green deploy:
 
 ```nginx
+# /etc/nginx/claude-terminal-upstream.conf
+# (managed automatically by deploy.sh — do not edit manually)
+server 127.0.0.1:3000;
+```
+
+```nginx
+upstream claude-terminal {
+    include /etc/nginx/claude-terminal-upstream.conf;
+}
+
 server {
     listen 443 ssl http2;
     server_name your-domain.com;
@@ -99,7 +113,7 @@ server {
     client_max_body_size 55M;  # for chat file uploads (50MB + overhead)
 
     location / {
-        proxy_pass http://127.0.0.1:3000;
+        proxy_pass http://claude-terminal;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -127,9 +141,11 @@ sudo certbot --nginx -d your-domain.com
 
 ### 6. Run with PM2 (recommended)
 
+`ecosystem.config.js` defines two instances (blue on port 3000, green on port 3001) for zero-downtime deploys. For initial start, only one is needed:
+
 ```bash
 npm install -g pm2
-pm2 start ecosystem.config.js
+pm2 start ecosystem.config.js --only claude-terminal-blue
 pm2 save
 pm2 startup
 ```
@@ -160,21 +176,24 @@ sudo systemctl enable --now xvfb
 ## How it works
 
 ```
-Browser (xterm.js) ←WebSocket→ server.js ←node-pty→ Claude CLI
+Browser (xterm.js) ←WebSocket→ server.js ←node-pty→ tmux ←→ Claude CLI
 Browser (chat UI)  ←REST+WS──→ server.js ←────────→ SQLite (messages, users)
 Browser (presence) ←WebSocket→ server.js ←────────→ PresenceManager (cursors, peers)
                                     ↑
                                Next.js API routes
                                (auth, sessions, files, chat, admin)
+
+nginx ←→ upstream (blue:3000 | green:3001) — zero-downtime blue-green deploy
 ```
 
 1. **server.js** starts HTTP server with Next.js + WebSocket, loads `.env.local`, validates config, initializes SQLite DB
 2. Users register → admin approves via admin panel (or email if SMTP configured)
 3. On login, JWT token with user identity is issued (httpOnly cookie)
-4. Terminal sessions connect via WebSocket, PTY spawned by **terminal-manager.js**
-5. Chat messages stored in SQLite, broadcast to all peers via presence WebSocket
-6. Image paste uses X11 clipboard bridge (Xvfb + xclip on DISPLAY :99)
-7. File manager reads session directories via REST API
+4. Terminal sessions run inside **tmux** (`tmux -L claude-terminal`) — they survive server restarts and deploys
+5. **node-pty** attaches to tmux sessions lazily (on first client connect via WebSocket)
+6. Chat messages stored in SQLite, broadcast to all peers via presence WebSocket
+7. Image paste uses X11 clipboard bridge (Xvfb + xclip on DISPLAY :99)
+8. File manager reads session directories via REST API
 
 ## User management
 
@@ -210,9 +229,10 @@ curl http://localhost:3000/api/health
 ```bash
 git pull
 npm install
-npm run build
-pm2 restart claude-terminal
+bash deploy.sh
 ```
+
+The deploy script builds, starts a new instance on the inactive port, health-checks it, switches nginx, and drains the old one. Zero downtime — tmux sessions and WebSocket clients survive automatically.
 
 ## Backup
 
@@ -231,7 +251,9 @@ Back up these files regularly:
 ├── chat-manager.js              # Persistent chat: messages, files, broadcast
 ├── terminal-manager.js          # PTY session lifecycle manager
 ├── presence-manager.js          # Cursor, ephemeral chat, peer tracking
-├── ecosystem.config.js          # PM2 config
+├── ecosystem.config.js          # PM2 blue-green config (blue:3000, green:3001)
+├── deploy.sh                    # Zero-downtime blue-green deploy script
+├── tmux.conf                    # tmux config for CLI sessions (50k scrollback, no status bar)
 ├── data/                        # SQLite database (gitignored)
 ├── chat-uploads/                # Uploaded files (gitignored)
 ├── src/
@@ -311,8 +333,9 @@ By default the server listens on `127.0.0.1`. For direct access (without Nginx),
 
 ## Known limitations
 
-- Rate limiting is stored in-memory — resets on server restart
+- Rate limiting is stored in-memory — resets on server restart / deploy
 - No database migration system — schema changes require manual ALTER TABLE or DB recreation
+- Blue-green deploy requires nginx — for localhost-only setups, use `pm2 restart` instead
 
 ## License
 

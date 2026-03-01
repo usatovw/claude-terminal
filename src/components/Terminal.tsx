@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
@@ -9,6 +9,8 @@ import { useTheme } from "@/lib/ThemeContext";
 import { themeConfigs } from "@/lib/theme-config";
 import { useTerminalScroll } from "@/lib/TerminalScrollContext";
 import { getOS } from "@/lib/useOS";
+
+const MAX_AUTH_FAILURES = 10;
 
 interface TerminalProps {
   sessionId: string;
@@ -22,6 +24,15 @@ export default function Terminal({ sessionId, fullscreen, onConnectionChange }: 
   const wsRef = useRef<WebSocket | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const initRef = useRef(false);
+  const unmountedRef = useRef(false);
+  const isConnectingRef = useRef(false);
+  const isReconnectRef = useRef(false);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectAttemptRef = useRef(0);
+  const authFailureCountRef = useRef(0);
+  const dataDisposableRef = useRef<{ dispose: () => void } | null>(null);
+  const [reconnecting, setReconnecting] = useState(false);
+  const [authExpired, setAuthExpired] = useState(false);
   const { theme } = useTheme();
   const themeRef = useRef(theme);
   themeRef.current = theme;
@@ -32,6 +43,9 @@ export default function Terminal({ sessionId, fullscreen, onConnectionChange }: 
   const registerScrollFnRef = useRef(registerScrollFn);
   registerScrollFnRef.current = registerScrollFn;
 
+  const onConnectionChangeRef = useRef(onConnectionChange);
+  onConnectionChangeRef.current = onConnectionChange;
+
   // Update terminal theme when theme changes
   useEffect(() => {
     if (xtermRef.current) {
@@ -41,16 +55,15 @@ export default function Terminal({ sessionId, fullscreen, onConnectionChange }: 
 
   // Refit xterm when fullscreen changes
   useEffect(() => {
-    if (!fitAddonRef.current || !wsRef.current) return;
+    if (!fitAddonRef.current || !xtermRef.current) return;
     const fitAddon = fitAddonRef.current;
-    const ws = wsRef.current;
     const term = xtermRef.current;
 
-    // Double rAF to guarantee layout + paint completed
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         fitAddon.fit();
-        if (term && ws.readyState === WebSocket.OPEN) {
+        const ws = wsRef.current;
+        if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(
             JSON.stringify({
               type: "resize",
@@ -59,24 +72,166 @@ export default function Terminal({ sessionId, fullscreen, onConnectionChange }: 
             })
           );
         }
-        // Publish scroll after resize so cursor positions recalculate with new rows
-        if (term) {
-          updateScrollRef.current({
-            viewportY: term.buffer.active.viewportY,
-            rows: term.rows,
-            totalLines: term.buffer.active.length,
-          });
-        }
+        updateScrollRef.current({
+          viewportY: term.buffer.active.viewportY,
+          rows: term.rows,
+          totalLines: term.buffer.active.length,
+        });
       });
     });
   }, [fullscreen]);
 
-  const connectTerminal = useCallback(async () => {
-    if (!terminalRef.current || !sessionId) return;
+  // Schedule reconnect with exponential backoff
+  const scheduleReconnect = useCallback(() => {
+    if (unmountedRef.current) return;
+    setReconnecting(true);
+    const attempt = reconnectAttemptRef.current++;
+    const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
+    reconnectTimerRef.current = setTimeout(() => {
+      connectWs();
+    }, delay);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    const tokenRes = await fetch("/api/auth/ws-token");
-    if (!tokenRes.ok) return;
-    const { token } = await tokenRes.json();
+  // Connect/reconnect WebSocket (separate from terminal init)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const connectWs = useCallback(async () => {
+    const term = xtermRef.current;
+    if (!term || !sessionId || unmountedRef.current) return;
+
+    // Guard: prevent concurrent connectWs calls
+    if (isConnectingRef.current) return;
+    isConnectingRef.current = true;
+
+    try {
+      // Close any existing WebSocket before creating a new one
+      if (wsRef.current) {
+        const oldWs = wsRef.current;
+        oldWs.onclose = null; // Prevent old onclose from triggering reconnect
+        oldWs.onmessage = null;
+        oldWs.onerror = null;
+        if (oldWs.readyState === WebSocket.OPEN || oldWs.readyState === WebSocket.CONNECTING) {
+          oldWs.close();
+        }
+        wsRef.current = null;
+      }
+
+      const tokenRes = await fetch("/api/auth/ws-token");
+      if (!tokenRes.ok) {
+        // Token fetch failed (likely auth expired)
+        authFailureCountRef.current++;
+        onConnectionChangeRef.current?.("disconnected");
+
+        if (authFailureCountRef.current >= MAX_AUTH_FAILURES) {
+          setAuthExpired(true);
+          setReconnecting(false);
+          return;
+        }
+
+        // Keep retrying — cookie might refresh from another tab
+        scheduleReconnect();
+        return;
+      }
+
+      // Auth succeeded, reset failure counter
+      authFailureCountRef.current = 0;
+      setAuthExpired(false);
+
+      const { token } = await tokenRes.json();
+      if (unmountedRef.current) return;
+
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${protocol}//${window.location.host}/api/terminal?sessionId=${encodeURIComponent(sessionId)}&token=${encodeURIComponent(token)}`;
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        reconnectAttemptRef.current = 0;
+        setReconnecting(false);
+        onConnectionChangeRef.current?.("connected");
+
+        // On reconnect: clear terminal and let server send fresh buffer
+        if (isReconnectRef.current) {
+          term.clear();
+          isReconnectRef.current = false;
+        }
+
+        // Send current terminal size
+        ws.send(
+          JSON.stringify({
+            type: "resize",
+            cols: term.cols,
+            rows: term.rows,
+          })
+        );
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          switch (message.type) {
+            case "output":
+              term.write(message.data);
+              break;
+            case "exit":
+              term.write(
+                "\r\n\x1b[90m--- Сессия остановлена ---\x1b[0m\r\n"
+              );
+              break;
+            case "stopped":
+              term.write(
+                "\x1b[90m--- Сессия остановлена. Нажмите \"Возобновить\" в боковой панели. ---\x1b[0m\r\n"
+              );
+              break;
+            case "error":
+              term.write(
+                `\r\n\x1b[31m${message.message}\x1b[0m\r\n`
+              );
+              break;
+          }
+        } catch {
+          term.write(event.data);
+        }
+      };
+
+      ws.onclose = (event) => {
+        onConnectionChangeRef.current?.("disconnected");
+        wsRef.current = null;
+
+        // Don't reconnect if component unmounting
+        if (unmountedRef.current) return;
+        // Don't reconnect on explicit auth/session errors
+        if (event.code === 4401 || event.code === 4404) return;
+
+        // Mark as reconnecting for buffer dedup on next connect
+        isReconnectRef.current = true;
+        scheduleReconnect();
+      };
+
+      // Dispose old onData listener and register new one
+      dataDisposableRef.current?.dispose();
+      dataDisposableRef.current = term.onData((data) => {
+        // Filter terminal query responses (DA1, DA2, DA3, CPR) —
+        // xterm.js auto-replies to tmux capability probes; echoing them
+        // back into the PTY produces visible garbage like [?1;2c
+        if (/^\x1b\[[\?>=]/.test(data) || /^\x1b\[\d+;\d+R$/.test(data)) return;
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "input", data }));
+        }
+      });
+    } catch {
+      // Network error fetching token — retry
+      if (unmountedRef.current) return;
+      isReconnectRef.current = true;
+      scheduleReconnect();
+    } finally {
+      isConnectingRef.current = false;
+    }
+  }, [sessionId, scheduleReconnect]);
+
+  // Initialize terminal ONCE, then connect WebSocket
+  const initTerminal = useCallback(async () => {
+    if (!terminalRef.current || !sessionId) return;
 
     const term = new XTerm({
       cursorBlink: true,
@@ -103,7 +258,7 @@ export default function Terminal({ sessionId, fullscreen, onConnectionChange }: 
     xtermRef.current = term;
     fitAddonRef.current = fitAddon;
 
-    // Scroll tracking via xterm API (xterm v6 uses custom scrollbar, not native scrollTop)
+    // Scroll tracking via xterm API
     const publishScroll = () => {
       updateScrollRef.current({
         viewportY: term.buffer.active.viewportY,
@@ -111,14 +266,10 @@ export default function Terminal({ sessionId, fullscreen, onConnectionChange }: 
         totalLines: term.buffer.active.length,
       });
     };
-    // onScroll fires AFTER viewportY is updated — safe to read directly
     const scrollDisposable = term.onScroll(() => publishScroll());
-    // onWriteParsed fires BEFORE xterm auto-scrolls (auto-scroll is deferred to RAF)
-    // → defer our read to next frame so viewportY reflects the auto-scroll
     const writeDisposable = term.onWriteParsed(() => {
       requestAnimationFrame(() => publishScroll());
     });
-    // Defer initial publish until after fitAddon.fit() completes (double RAF)
     requestAnimationFrame(() => {
       requestAnimationFrame(() => publishScroll());
     });
@@ -127,58 +278,9 @@ export default function Terminal({ sessionId, fullscreen, onConnectionChange }: 
       term.scrollToLine(Math.min(maxLine, Math.max(0, Math.round(line - term.rows / 2))));
     });
 
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/api/terminal?sessionId=${encodeURIComponent(sessionId)}&token=${encodeURIComponent(token)}`;
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      onConnectionChange?.("connected");
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data);
-        switch (message.type) {
-          case "output":
-            term.write(message.data);
-            break;
-          case "exit":
-            term.write(
-              "\r\n\x1b[90m--- Сессия остановлена ---\x1b[0m\r\n"
-            );
-            break;
-          case "stopped":
-            term.write(
-              "\x1b[90m--- Сессия остановлена. Нажмите \"Возобновить\" в боковой панели. ---\x1b[0m\r\n"
-            );
-            break;
-          case "error":
-            term.write(
-              `\r\n\x1b[31m${message.message}\x1b[0m\r\n`
-            );
-            break;
-        }
-      } catch {
-        term.write(event.data);
-      }
-    };
-
-    ws.onclose = () => {
-      onConnectionChange?.("disconnected");
-    };
-
-    term.onData((data) => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "input", data }));
-      }
-    });
-
     // Platform-aware keyboard handling
-    // Use e.code (physical key) instead of e.key to work with any keyboard layout (RU, etc.)
     const isMac = getOS() === "mac";
 
-    // Clipboard write helper — works on both HTTPS and HTTP
     const copyText = (text: string) => {
       if (navigator.clipboard?.writeText) {
         navigator.clipboard.writeText(text).catch(() => {});
@@ -197,17 +299,14 @@ export default function Terminal({ sessionId, fullscreen, onConnectionChange }: 
     term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
       if (e.type !== "keydown") return true;
 
-      // --- Paste: Ctrl+V / Cmd+V / Ctrl+Shift+V ---
       if (
         ((e.ctrlKey || e.metaKey) && e.code === "KeyV") ||
         (e.ctrlKey && e.shiftKey && e.code === "KeyV")
       ) {
-        return false; // Block xterm, let browser fire paste event naturally
+        return false;
       }
 
-      // --- Copy (Win/Linux only — Mac uses Cmd+C natively) ---
       if (!isMac) {
-        // Ctrl+Shift+C → always copy
         if (e.ctrlKey && e.shiftKey && e.code === "KeyC") {
           const sel = term.getSelection();
           if (sel) {
@@ -218,7 +317,6 @@ export default function Terminal({ sessionId, fullscreen, onConnectionChange }: 
           return false;
         }
 
-        // Ctrl+C: with selection → copy, without → SIGINT
         if (e.ctrlKey && !e.shiftKey && !e.altKey && e.code === "KeyC") {
           const sel = term.getSelection();
           if (sel) {
@@ -227,15 +325,14 @@ export default function Terminal({ sessionId, fullscreen, onConnectionChange }: 
             term.clearSelection();
             return false;
           }
-          return true; // No selection — let xterm send SIGINT
+          return true;
         }
       }
 
       return true;
     });
 
-    // Intercept paste event in CAPTURE phase (before xterm's handler)
-    // paste event has fresh, synchronous clipboard data — no stale cache issues
+    // Intercept paste event — uses wsRef so it works after reconnect
     const handlePaste = (e: ClipboardEvent) => {
       if (!e.clipboardData) return;
 
@@ -249,7 +346,8 @@ export default function Terminal({ sessionId, fullscreen, onConnectionChange }: 
           const reader = new FileReader();
           reader.onload = () => {
             const base64 = (reader.result as string).split(",")[1];
-            if (ws.readyState === WebSocket.OPEN) {
+            const ws = wsRef.current;
+            if (ws && ws.readyState === WebSocket.OPEN) {
               ws.send(JSON.stringify({ type: "image", data: base64 }));
             }
           };
@@ -257,13 +355,14 @@ export default function Terminal({ sessionId, fullscreen, onConnectionChange }: 
           return;
         }
       }
-      // No image — let paste event propagate to xterm for normal text paste
     };
     terminalRef.current.addEventListener("paste", handlePaste, true);
 
+    // Resize handler — uses wsRef so it works after reconnect
     const handleResize = () => {
       fitAddon.fit();
-      if (ws.readyState === WebSocket.OPEN) {
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(
           JSON.stringify({
             type: "resize",
@@ -272,7 +371,6 @@ export default function Terminal({ sessionId, fullscreen, onConnectionChange }: 
           })
         );
       }
-      // Defer to next frame so layout has settled after fit
       requestAnimationFrame(() => publishScroll());
     };
 
@@ -281,37 +379,64 @@ export default function Terminal({ sessionId, fullscreen, onConnectionChange }: 
       resizeObserver.observe(terminalRef.current);
     }
 
+    // Connect WebSocket
+    await connectWs();
+
     const containerEl = terminalRef.current;
     return () => {
+      unmountedRef.current = true;
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+      }
       containerEl?.removeEventListener("paste", handlePaste, true);
       scrollDisposable.dispose();
       writeDisposable.dispose();
+      dataDisposableRef.current?.dispose();
       registerScrollFnRef.current(null);
       resizeObserver.disconnect();
-      ws.close();
+      // Clean close of WebSocket
+      if (wsRef.current) {
+        wsRef.current.onclose = null;
+        wsRef.current.close();
+        wsRef.current = null;
+      }
       term.dispose();
     };
-  }, [sessionId, onConnectionChange]);
+  }, [sessionId, connectWs]);
 
   useEffect(() => {
     if (initRef.current) return;
     initRef.current = true;
+    unmountedRef.current = false;
 
     let cleanup: (() => void) | undefined;
-    connectTerminal().then((fn) => {
+    initTerminal().then((fn) => {
       cleanup = fn;
     });
 
     return () => {
-      initRef.current = false;
+      // Don't reset initRef — prevents double init in StrictMode
       cleanup?.();
     };
-  }, [connectTerminal]);
+  }, [initTerminal]);
 
   return (
-    <div
-      ref={terminalRef}
-      className="w-full h-full min-h-0"
-    />
+    <div className="relative w-full h-full min-h-0">
+      <div
+        ref={terminalRef}
+        className="w-full h-full min-h-0"
+      />
+      {reconnecting && !authExpired && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 bg-amber-500/90 text-white text-xs px-3 py-1.5 rounded-full flex items-center gap-2 animate-pulse shadow-lg">
+          <div className="w-2.5 h-2.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          Переподключение...
+        </div>
+      )}
+      {authExpired && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 bg-red-500/90 text-white text-xs px-3 py-1.5 rounded-full shadow-lg">
+          Сессия истекла — обновите страницу
+        </div>
+      )}
+    </div>
   );
 }

@@ -3,6 +3,47 @@ const fs = require("fs");
 const path = require("path");
 const { execSync, spawn } = require("child_process");
 
+// ── tmux configuration ──
+const TMUX_SOCKET = "claude-terminal";
+const TMUX_CONF = path.join(__dirname, "tmux.conf");
+
+function tmuxHasSession(sessionId) {
+  try {
+    execSync(`tmux -L ${TMUX_SOCKET} has-session -t "${sessionId}" 2>/dev/null`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function tmuxPaneAlive(sessionId) {
+  try {
+    const output = execSync(
+      `tmux -L ${TMUX_SOCKET} list-panes -t "${sessionId}" -F "#{pane_dead}" 2>/dev/null`,
+      { encoding: "utf-8" }
+    ).trim();
+    return output === "0";
+  } catch {
+    return false;
+  }
+}
+
+// Strip alternate screen sequences so xterm.js stays in normal buffer.
+// tmux uses alt screen internally — but xterm.js needs normal buffer
+// for scrollback to work (mouse wheel scroll through history).
+const ALT_SCREEN_RE = /\x1b\[\?(1049|1047|47)[hl]/g;
+
+function tmuxCapture(sessionId, lines = 500) {
+  try {
+    return execSync(
+      `tmux -L ${TMUX_SOCKET} capture-pane -t "${sessionId}" -p -e -S -${lines} 2>/dev/null`,
+      { encoding: "utf-8", maxBuffer: 2 * 1024 * 1024 }
+    );
+  } catch {
+    return "";
+  }
+}
+
 // Allowlist of safe env vars for PTY sessions.
 // NEVER spread process.env — it leaks JWT_SECRET, SMTP_PASS, etc.
 const SAFE_ENV_KEYS = [
@@ -27,6 +68,13 @@ for (const key of SAFE_ENV_KEYS) {
 const DATA_DIR = path.join(process.env.HOME || "/root", "projects", "Claude");
 const SESSIONS_FILE = path.join(DATA_DIR, ".sessions.json");
 
+// Build env string for tmux session command
+function buildEnvPrefix() {
+  return Object.entries(PTY_ENV)
+    .map(([k, v]) => `${k}='${v.replace(/'/g, "'\\''")}'`)
+    .join(" ");
+}
+
 // Validate command string: no shell metacharacters
 function validateCommand(cmd) {
   if (/[;|&$`\\]/.test(cmd)) {
@@ -34,11 +82,29 @@ function validateCommand(cmd) {
   }
 }
 
+// Attach node-pty to an existing tmux session
+function attachTmux(sessionId, cols = 120, rows = 40, cwd) {
+  return pty.spawn("tmux", [
+    "-L", TMUX_SOCKET, "-f", TMUX_CONF,
+    "attach-session", "-t", sessionId,
+  ], {
+    name: "xterm-256color",
+    cols,
+    rows,
+    cwd: cwd || process.env.HOME || "/root",
+    env: PTY_ENV,
+  });
+}
+
 class TerminalManager {
   constructor() {
     this.sessions = new Map();
     this.ephemeralSessions = new Map();
-    this._loadSessions();
+    this._watchCallback = null;
+    this._loadSessions();              // Load known sessions FIRST
+    this._cleanupOrphanedTmux();       // THEN clean orphans not in the loaded set
+    this._reconnectTmuxSessions();
+    this._watchSessionsFile();
   }
 
   _saveSessions() {
@@ -72,7 +138,7 @@ class TerminalManager {
             connectedClients: new Set(),
             createdAt: new Date(entry.createdAt),
             buffer: "",
-            exited: true, // All restored sessions start as stopped
+            exited: true, // Will be updated by _reconnectTmuxSessions
             displayName: entry.displayName || null,
             providerSlug: entry.providerSlug || "claude",
           });
@@ -83,10 +149,110 @@ class TerminalManager {
     }
   }
 
-  _setupPty(session) {
+  // Check tmux sessions that survived server restart — lazy re-attach
+  // Does NOT spawn node-pty here. PTY is attached lazily when a client connects
+  // via attachToSession(). This prevents dual-attach during blue-green deploy overlap.
+  _reconnectTmuxSessions() {
+    for (const [sessionId, session] of this.sessions) {
+      if (session.exited && tmuxHasSession(sessionId)) {
+        if (!tmuxPaneAlive(sessionId)) {
+          // tmux session exists but pane is dead — clean up
+          console.log(`> Dead tmux pane: ${sessionId} — killing session`);
+          try {
+            execSync(`tmux -L ${TMUX_SOCKET} kill-session -t "${sessionId}" 2>/dev/null`);
+          } catch {}
+          continue;
+        }
+        session.exited = false;
+        // Pre-capture buffer so first client gets history immediately
+        session.buffer = tmuxCapture(sessionId, 100) || "";
+        console.log(`> tmux session alive: ${sessionId} (PTY will attach on client connect)`);
+      }
+    }
+  }
+
+  // Kill tmux sessions not tracked in .sessions.json
+  _cleanupOrphanedTmux() {
+    try {
+      const output = execSync(
+        `tmux -L ${TMUX_SOCKET} list-sessions -F "#{session_name}" 2>/dev/null`,
+        { encoding: "utf-8" }
+      );
+      const tmuxSessions = output.trim().split("\n").filter(Boolean);
+      const knownIds = new Set(this.sessions.keys());
+
+      for (const tmuxName of tmuxSessions) {
+        if (!knownIds.has(tmuxName)) {
+          console.log(`> Killing orphaned tmux session: ${tmuxName}`);
+          try {
+            execSync(`tmux -L ${TMUX_SOCKET} kill-session -t "${tmuxName}" 2>/dev/null`);
+          } catch {}
+        }
+      }
+    } catch {
+      // No tmux server running — nothing to clean
+    }
+  }
+
+  // Watch .sessions.json for changes from another instance (blue-green deploy)
+  _watchSessionsFile() {
+    try {
+      this._watchCallback = () => {
+        this._syncFromDisk();
+      };
+      fs.watchFile(SESSIONS_FILE, { interval: 2000 }, this._watchCallback);
+    } catch {
+      // Ignore watch errors
+    }
+  }
+
+  // Cleanup: remove file watcher (call from server.js graceful shutdown)
+  destroy() {
+    if (this._watchCallback) {
+      fs.unwatchFile(SESSIONS_FILE, this._watchCallback);
+      this._watchCallback = null;
+    }
+  }
+
+  _syncFromDisk() {
+    try {
+      const raw = fs.readFileSync(SESSIONS_FILE, "utf-8");
+      const data = JSON.parse(raw);
+      for (const entry of data) {
+        if (!this.sessions.has(entry.sessionId) && fs.existsSync(entry.projectDir)) {
+          const session = {
+            pty: null,
+            projectDir: entry.projectDir,
+            connectedClients: new Set(),
+            createdAt: new Date(entry.createdAt),
+            buffer: "",
+            exited: true,
+            displayName: entry.displayName || null,
+            providerSlug: entry.providerSlug || "claude",
+          };
+
+          // Check if tmux session exists with alive pane (created by another instance)
+          if (tmuxHasSession(entry.sessionId) && tmuxPaneAlive(entry.sessionId)) {
+            session.exited = false;
+            session.buffer = tmuxCapture(entry.sessionId, 100) || "";
+            console.log(`> Synced tmux session from disk: ${entry.sessionId} (lazy)`);
+          }
+
+          this.sessions.set(entry.sessionId, session);
+        }
+      }
+    } catch {}
+  }
+
+  _setupPty(session, sessionId) {
     const ptyProcess = session.pty;
 
-    ptyProcess.onData((data) => {
+    ptyProcess.onData((rawData) => {
+      // Strip alternate screen sequences — keeps xterm.js in normal buffer
+      // so scrollback works. tmux still uses alt screen internally.
+      const data = rawData.replace(ALT_SCREEN_RE, "");
+      if (!data) return;
+
       session.buffer += data;
       if (session.buffer.length > 500000) {
         session.buffer = session.buffer.slice(-500000);
@@ -98,13 +264,23 @@ class TerminalManager {
       }
     });
 
-    ptyProcess.onExit(({ exitCode, signal }) => {
-      for (const client of session.connectedClients) {
-        if (client.readyState === 1) {
-          client.send(JSON.stringify({ type: "exit", exitCode, signal }));
+    ptyProcess.onExit(() => {
+      // node-pty (tmux attach) exited. Always clear PTY ref.
+      session.pty = null;
+
+      if (tmuxHasSession(sessionId)) {
+        // tmux still alive — our attachment just died (server restart, deploy, etc.)
+        // Don't mark as exited. Clients will auto-reconnect and get a new PTY attachment.
+        console.log(`> PTY detached from tmux ${sessionId} (tmux still alive)`);
+      } else {
+        // tmux session gone — CLI actually exited
+        session.exited = true;
+        for (const client of session.connectedClients) {
+          if (client.readyState === 1) {
+            client.send(JSON.stringify({ type: "exit", exitCode: 0, signal: 0 }));
+          }
         }
       }
-      session.exited = true;
     });
   }
 
@@ -130,18 +306,22 @@ class TerminalManager {
     const projectDir = path.join(DATA_DIR, sessionId);
     fs.mkdirSync(projectDir, { recursive: true });
 
-    const parts = provider.command.split(" ").filter(Boolean);
     validateCommand(provider.command);
-    const executable = parts[0];
-    const args = parts.slice(1);
+    const command = provider.command;
+    const envPrefix = buildEnvPrefix();
 
-    const ptyProcess = pty.spawn(executable, args, {
-      name: "xterm-256color",
-      cols: 120,
-      rows: 40,
-      cwd: projectDir,
-      env: PTY_ENV,
-    });
+    // Create tmux session with the CLI command
+    try {
+      execSync(
+        `tmux -L ${TMUX_SOCKET} -f ${TMUX_CONF} new-session -d -s "${sessionId}" -x 120 -y 40 -c "${projectDir}" -- env ${envPrefix} ${command}`,
+        { stdio: ["pipe", "pipe", "pipe"] }
+      );
+    } catch (err) {
+      throw new Error(`Failed to create tmux session: ${err.message}`);
+    }
+
+    // Attach node-pty to the tmux session
+    const ptyProcess = attachTmux(sessionId, 120, 40, projectDir);
 
     const session = {
       pty: ptyProcess,
@@ -154,7 +334,7 @@ class TerminalManager {
       providerSlug,
     };
 
-    this._setupPty(session);
+    this._setupPty(session, sessionId);
     this.sessions.set(sessionId, session);
     this._saveSessions();
     return { sessionId, projectDir };
@@ -165,39 +345,47 @@ class TerminalManager {
     if (!session) return { ok: false, error: "not_found" };
     if (!session.exited) return { ok: false, error: "already_active" };
 
+    // Clean up any leftover tmux session
+    if (tmuxHasSession(sessionId)) {
+      try {
+        execSync(`tmux -L ${TMUX_SOCKET} kill-session -t "${sessionId}" 2>/dev/null`);
+      } catch {}
+    }
+
     // Look up provider for resume command
     const db = global.db;
     const provider = db.prepare("SELECT * FROM cli_providers WHERE slug = ?").get(session.providerSlug || "claude");
 
-    let executable, args;
+    let command;
     if (provider && provider.resume_command) {
       validateCommand(provider.resume_command);
-      const parts = provider.resume_command.split(" ").filter(Boolean);
-      executable = parts[0];
-      args = parts.slice(1);
+      command = provider.resume_command;
     } else if (provider) {
       validateCommand(provider.command);
-      const parts = provider.command.split(" ").filter(Boolean);
-      executable = parts[0];
-      args = parts.slice(1);
+      command = provider.command;
     } else {
-      // Fallback for deleted providers
-      executable = "/bin/bash";
-      args = [];
+      command = "/bin/bash";
     }
 
-    const ptyProcess = pty.spawn(executable, args, {
-      name: "xterm-256color",
-      cols: 120,
-      rows: 40,
-      cwd: session.projectDir,
-      env: PTY_ENV,
-    });
+    const envPrefix = buildEnvPrefix();
+
+    // Create new tmux session with the resume command
+    try {
+      execSync(
+        `tmux -L ${TMUX_SOCKET} -f ${TMUX_CONF} new-session -d -s "${sessionId}" -x 120 -y 40 -c "${session.projectDir}" -- env ${envPrefix} ${command}`,
+        { stdio: ["pipe", "pipe", "pipe"] }
+      );
+    } catch (err) {
+      return { ok: false, error: `tmux: ${err.message}` };
+    }
+
+    // Attach node-pty
+    const ptyProcess = attachTmux(sessionId, 120, 40, session.projectDir);
 
     session.pty = ptyProcess;
     session.exited = false;
     session.buffer = "";
-    this._setupPty(session);
+    this._setupPty(session, sessionId);
 
     return { ok: true };
   }
@@ -205,7 +393,19 @@ class TerminalManager {
   stopSession(sessionId) {
     const session = this.sessions.get(sessionId);
     if (!session || session.exited) return false;
-    session.pty.kill();
+
+    // Kill the tmux session (kills CLI inside it)
+    if (tmuxHasSession(sessionId)) {
+      try {
+        execSync(`tmux -L ${TMUX_SOCKET} kill-session -t "${sessionId}" 2>/dev/null`);
+      } catch {}
+    }
+
+    // Also kill the node-pty attachment
+    if (session.pty) {
+      try { session.pty.kill(); } catch {}
+    }
+
     session.exited = true;
     return true;
   }
@@ -220,6 +420,36 @@ class TerminalManager {
 
     session.connectedClients.add(ws);
 
+    // Lazy PTY attachment: if tmux is alive but no node-pty is attached,
+    // spawn PTY now (first client to connect gets it)
+    if (!session.exited && !session.pty && tmuxHasSession(sessionId)) {
+      if (!tmuxPaneAlive(sessionId)) {
+        // Pane is dead (e.g. [lost tty]) — clean up and mark stopped
+        console.log(`> Dead tmux pane on attach: ${sessionId} — cleaning up`);
+        try {
+          execSync(`tmux -L ${TMUX_SOCKET} kill-session -t "${sessionId}" 2>/dev/null`);
+        } catch {}
+        session.exited = true;
+      } else {
+        try {
+          // Capture full buffer before attaching PTY
+          session.buffer = tmuxCapture(sessionId, 500) || session.buffer;
+          const ptyProcess = attachTmux(sessionId, 120, 40, session.projectDir);
+          session.pty = ptyProcess;
+          this._setupPty(session, sessionId);
+          console.log(`> Lazy PTY attached to tmux: ${sessionId}`);
+        } catch (err) {
+          // Kill PTY if it was spawned but setup failed
+          if (session.pty) {
+            try { session.pty.kill(); } catch {}
+            session.pty = null;
+          }
+          console.error(`> Failed to lazy-attach PTY to tmux ${sessionId}:`, err.message);
+        }
+      }
+    }
+
+    // Send buffered output to the new client
     if (session.buffer) {
       ws.send(JSON.stringify({ type: "output", data: session.buffer }));
     }
@@ -233,12 +463,12 @@ class TerminalManager {
         const message = JSON.parse(rawMessage.toString());
         switch (message.type) {
           case "input":
-            if (!session.exited) {
+            if (!session.exited && session.pty) {
               session.pty.write(message.data);
             }
             break;
           case "resize":
-            if (!session.exited && message.cols && message.rows) {
+            if (!session.exited && session.pty && message.cols && message.rows) {
               session.pty.resize(message.cols, message.rows);
             }
             break;
@@ -276,7 +506,7 @@ class TerminalManager {
                   ws.send(JSON.stringify({ type: "output", data: `\r\n\x1b[31m✗ xclip: ${xclipError}\x1b[0m\r\n` }));
                   return;
                 }
-                if (!session.exited) {
+                if (!session.exited && session.pty) {
                   session.pty.write('\x16');
                 }
               }, 200);
@@ -311,8 +541,21 @@ class TerminalManager {
     const resolved = path.resolve(session.projectDir);
     if (!resolved.startsWith(DATA_DIR + path.sep)) return false;
 
-    if (!session.exited) {
-      session.pty.kill();
+    // Kill xclip process if alive
+    if (session._xclipPid) {
+      try { process.kill(session._xclipPid); } catch {}
+      session._xclipPid = null;
+    }
+
+    // Kill tmux session if alive
+    if (tmuxHasSession(sessionId)) {
+      try {
+        execSync(`tmux -L ${TMUX_SOCKET} kill-session -t "${sessionId}" 2>/dev/null`);
+      } catch {}
+    }
+
+    if (!session.exited && session.pty) {
+      try { session.pty.kill(); } catch {}
       session.exited = true;
     }
 
@@ -338,8 +581,21 @@ class TerminalManager {
     const session = this.sessions.get(sessionId);
     if (!session) return false;
 
-    if (!session.exited) {
-      session.pty.kill();
+    // Kill xclip process if alive
+    if (session._xclipPid) {
+      try { process.kill(session._xclipPid); } catch {}
+      session._xclipPid = null;
+    }
+
+    // Kill tmux session if alive
+    if (tmuxHasSession(sessionId)) {
+      try {
+        execSync(`tmux -L ${TMUX_SOCKET} kill-session -t "${sessionId}" 2>/dev/null`);
+      } catch {}
+    }
+
+    if (!session.exited && session.pty) {
+      try { session.pty.kill(); } catch {}
       session.exited = true;
     }
 
@@ -391,6 +647,7 @@ class TerminalManager {
   }
 
   // ── Ephemeral sessions (for provider wizard auth terminal) ──
+  // These remain as direct node-pty — they're short-lived and non-critical
 
   createEphemeralSession() {
     if (this.ephemeralSessions.size >= 3) {
@@ -420,9 +677,35 @@ class TerminalManager {
       this.destroyEphemeralSession(id);
     }, 5 * 60 * 1000);
 
-    this._setupPty(session);
+    this._setupEphemeralPty(session);
     this.ephemeralSessions.set(id, session);
     return id;
+  }
+
+  // Separate setup for ephemeral sessions (no tmux check on exit)
+  _setupEphemeralPty(session) {
+    const ptyProcess = session.pty;
+
+    ptyProcess.onData((data) => {
+      session.buffer += data;
+      if (session.buffer.length > 500000) {
+        session.buffer = session.buffer.slice(-500000);
+      }
+      for (const client of session.connectedClients) {
+        if (client.readyState === 1) {
+          client.send(JSON.stringify({ type: "output", data }));
+        }
+      }
+    });
+
+    ptyProcess.onExit(({ exitCode, signal }) => {
+      for (const client of session.connectedClients) {
+        if (client.readyState === 1) {
+          client.send(JSON.stringify({ type: "exit", exitCode, signal }));
+        }
+      }
+      session.exited = true;
+    });
   }
 
   attachToEphemeralSession(id, ws) {

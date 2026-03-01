@@ -369,6 +369,15 @@ async function main() {
   fs.writeFileSync(envPath, envContent, { mode: 0o600 });
   ok(".env.local written (mode 0600)");
 
+  // Create directories required at runtime
+  for (const dir of ["logs", "chat-uploads"]) {
+    const dirPath = path.join(__dirname, dir);
+    if (!fs.existsSync(dirPath)) {
+      fs.mkdirSync(dirPath, { recursive: true });
+      ok(`Created ${dir}/`);
+    }
+  }
+
   // ── Load env vars so db.js can use JWT_SECRET ──
   for (const line of envContent.split("\n")) {
     const trimmed = line.trim();

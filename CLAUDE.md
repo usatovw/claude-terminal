@@ -7,8 +7,8 @@ Self-hosted web interface for Claude Code CLI. Multi-user (registration + admin 
 ## Architecture
 
 ```
-Browser (xterm.js) ←→ WebSocket ←→ server.js ←→ node-pty ←→ Claude CLI
-                                       ↑
+Browser (xterm.js) ←→ WebSocket ←→ server.js ←→ node-pty ←→ tmux ←→ Claude CLI
+                        ↑ auto-reconnect              ↑ lazy attach
                                   Next.js API routes (auth, sessions, chat)
 
 Browser (presence) ←→ WebSocket ←→ server.js ←→ PresenceManager
@@ -17,13 +17,15 @@ Browser (presence) ←→ WebSocket ←→ server.js ←→ PresenceManager
 Browser (chat UI) ←→ REST API ←→ server.js ←→ ChatManager ←→ SQLite
                    ←→ WebSocket (real-time)      ↑
                                           chat_message broadcast
+
+nginx ←→ upstream (blue:3000 | green:3001) — zero-downtime blue-green deploy
 ```
 
 **server.js** — Custom HTTP server. Loads `.env.local`, validates startup (JWT_SECRET required, warns on missing Xvfb/xclip/admin), initializes SQLite DB (`db.js`), creates TerminalManager, PresenceManager, ChatManager. Handles Next.js pages + WebSocket upgrades. JWT validation on WS upgrade returns decoded payload with user identity. Health check at `/api/health`. Graceful shutdown on SIGTERM/SIGINT. HOST env var support for Docker. Exposes globals: `global.db`, `global.terminalManager`, `global.presenceManager`, `global.chatManager`.
 
 **db.js** — SQLite database (better-sqlite3, WAL mode). Tables: `users`, `messages`, `attachments`. Auto-creates `data/` directory. Seeds admin from env vars on first run. Auto-detects Claude CLI path via `which claude`.
 
-**terminal-manager.js** — Manages PTY sessions. Spawns `claude` CLI via node-pty, tracks connected WebSocket clients, handles session lifecycle (create/stop/resume/delete/rename). Persists session metadata to `~/.sessions.json`. Replay buffer: 500KB circular — new clients receive full history on connect.
+**terminal-manager.js** — Manages PTY sessions via tmux. CLI runs inside `tmux -L claude-terminal` sessions that survive server restarts/deploys. node-pty attaches lazily (on first client connect). Tracks WebSocket clients, handles session lifecycle (create/stop/resume/delete/rename). Persists metadata to `~/.sessions.json`. Watches file for cross-instance sync during blue-green deploy. Replay buffer: 500KB circular.
 
 **chat-manager.js** — Persistent global chat. Stores messages + file attachments in SQLite, broadcasts new messages to all connected presence WebSocket peers via `chat_message` event.
 
@@ -83,7 +85,26 @@ Browser (chat UI) ←→ REST API ←→ server.js ←→ ChatManager ←→ SQL
 | `src/components/presence/EdgeIndicator.tsx` | Off-screen cursor pill (name + arrow, click-to-scroll) |
 | `src/components/presence/PresenceAvatars.tsx` | Session peer avatars |
 | `src/components/ui/` | Aceternity UI components |
-| `ecosystem.config.js` | PM2 production config |
+| `ecosystem.config.js` | PM2 blue-green config (blue:3000, green:3001) |
+| `deploy.sh` | Zero-downtime blue-green deploy (flock, health check, rollback) |
+| `tmux.conf` | tmux config for CLI sessions (mouse off, 50k scrollback, no status bar) |
+
+## Deploy
+
+```bash
+bash deploy.sh
+```
+
+Blue-green deploy with zero downtime. The script:
+1. `flock` prevents parallel deploys
+2. Builds Next.js
+3. Starts new instance (blue↔green) on the inactive port
+4. Health checks `/api/health` with 60s timeout
+5. Switches nginx upstream, reloads nginx
+6. Drains old instance (5s), then stops it
+7. On failure: rolls back automatically, old instance keeps serving
+
+tmux sessions survive the entire process. Clients auto-reconnect via WebSocket (exponential backoff).
 
 ## Auth system
 

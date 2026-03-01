@@ -68,6 +68,23 @@
   --th-danger: #f87171;
   --th-success: #34d399;
   --th-warning: #fbbf24;
+  /* VS Code Dark+ syntax colors */
+  --th-syntax-keyword: #569CD6;
+  --th-syntax-control: #C586C0;
+  --th-syntax-fn: #DCDCAA;
+  --th-syntax-type: #4EC9B0;
+  --th-syntax-variable: #9CDCFE;
+  --th-syntax-property: #9CDCFE;
+  --th-syntax-param: #9CDCFE;
+  --th-syntax-string: #CE9178;
+  --th-syntax-number: #B5CEA8;
+  --th-syntax-comment: #6A9955;
+  --th-syntax-operator: #D4D4D4;
+  --th-syntax-tag: #569CD6;
+  --th-syntax-attr: #9CDCFE;
+  --th-syntax-regexp: #D16969;
+  --th-syntax-bool: #569CD6;
+  --th-syntax-punctuation: #808080;
   --th-font-sans: var(--font-geist-sans);
   --th-font-mono: var(--font-geist-mono);
   --th-radius: 0.75rem;
@@ -98,6 +115,23 @@
   --th-danger: #c0392b;
   --th-success: #2e7d32;
   --th-warning: #e09000;
+  /* VS Code Light+ syntax colors */
+  --th-syntax-keyword: #0000FF;
+  --th-syntax-control: #AF00DB;
+  --th-syntax-fn: #795E26;
+  --th-syntax-type: #267F99;
+  --th-syntax-variable: #001080;
+  --th-syntax-property: #001080;
+  --th-syntax-param: #001080;
+  --th-syntax-string: #A31515;
+  --th-syntax-number: #098658;
+  --th-syntax-comment: #008000;
+  --th-syntax-operator: #000000;
+  --th-syntax-tag: #800000;
+  --th-syntax-attr: #FF0000;
+  --th-syntax-regexp: #811F3F;
+  --th-syntax-bool: #0000FF;
+  --th-syntax-punctuation: #000000;
   --th-font-sans: var(--font-space-grotesk);
   --th-font-mono: "Space Mono", "Courier New", monospace;
   --th-radius: 0.375rem;
@@ -186,23 +220,30 @@ body {
   padding: 0 !important;
 }
 .hljs-keyword,
-.hljs-selector-tag,
-.hljs-built_in { color: var(--th-accent-fg); }
-.hljs-string,
-.hljs-attr { color: var(--th-success); }
+.hljs-selector-tag { color: var(--th-syntax-keyword); }
+.hljs-built_in { color: var(--th-syntax-keyword); }
+.hljs-string { color: var(--th-syntax-string); }
+.hljs-attr { color: var(--th-syntax-attr); }
 .hljs-comment,
-.hljs-quote { color: var(--th-muted-fg); font-style: italic; }
+.hljs-quote { color: var(--th-syntax-comment); font-style: italic; }
 .hljs-number,
-.hljs-literal { color: var(--th-warning); }
+.hljs-literal { color: var(--th-syntax-number); }
 .hljs-title,
-.hljs-section,
-.hljs-type { color: var(--th-accent-fg); font-weight: 600; }
+.hljs-title.function_ { color: var(--th-syntax-fn); }
+.hljs-section { color: var(--th-syntax-keyword); font-weight: 600; }
+.hljs-type,
+.hljs-title.class_ { color: var(--th-syntax-type); }
 .hljs-name,
-.hljs-tag { color: var(--th-danger); }
-.hljs-attribute { color: var(--th-warning); }
+.hljs-tag { color: var(--th-syntax-tag); }
+.hljs-attribute { color: var(--th-syntax-attr); }
 .hljs-variable,
-.hljs-template-variable { color: var(--th-fg); }
-.hljs-meta { color: var(--th-muted-fg); }
+.hljs-template-variable { color: var(--th-syntax-variable); }
+.hljs-params { color: var(--th-syntax-param); }
+.hljs-regexp { color: var(--th-syntax-regexp); }
+.hljs-symbol { color: var(--th-syntax-keyword); }
+.hljs-meta { color: var(--th-syntax-keyword); }
+.hljs-punctuation { color: var(--th-syntax-punctuation); }
+.hljs-operator { color: var(--th-syntax-operator); }
 .hljs-deletion { color: var(--th-danger); }
 .hljs-addition { color: var(--th-success); }
 
@@ -279,4 +320,50 @@ body {
 .md-viewer .task-list-item input[type="checkbox"] {
   margin-right: 0.5rem;
   accent-color: var(--th-accent);
+}
+
+/* ============================================
+   CODEMIRROR 6 EDITOR
+   ============================================ */
+.cm-editor-container .cm-editor {
+  height: 100%;
+  outline: none;
+}
+.cm-editor-container .cm-scroller {
+  overflow: auto;
+  font-family: var(--th-font-mono), monospace;
+}
+.cm-editor-container .cm-scroller::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.cm-editor-container .cm-scroller::-webkit-scrollbar-track {
+  background: transparent;
+}
+.cm-editor-container .cm-scroller::-webkit-scrollbar-thumb {
+  background: var(--th-muted);
+  border-radius: 4px;
+}
+.cm-editor-container .cm-scroller::-webkit-scrollbar-thumb:hover {
+  background: var(--th-muted-fg);
+}
+
+/* Retro theme overrides for CodeMirror */
+[data-theme="retro"] .cm-editor-container .cm-scroller::-webkit-scrollbar-track {
+  background: #c8c3b5;
+}
+[data-theme="retro"] .cm-editor-container .cm-scroller::-webkit-scrollbar-thumb {
+  background: #8a8480;
+  border-radius: 0;
+}
+
+/* ============================================
+   TAB BAR — hide scrollbar
+   ============================================ */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }

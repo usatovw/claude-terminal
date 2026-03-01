@@ -3,6 +3,7 @@
 import { useRef, useEffect } from "react";
 import { FolderIcon, FileIcon, Download, Pencil, Trash, CheckSquare, Square } from "@/components/Icons";
 import { formatFileSize, relativeTime } from "@/lib/utils";
+import { isTextFile, isImageFile } from "@/lib/editor-utils";
 
 export interface FileEntry {
   name: string;
@@ -75,8 +76,9 @@ export default function FileItem({
     if (isRenaming) return;
     if (entry.type === "directory") {
       onNavigate();
-    } else if (entry.extension === "md" && onOpenFile) {
-      onOpenFile();
+    } else if (isTextFile(entry.name) || isImageFile(entry.name)) {
+      // Open ALL text files and images in editor
+      if (onOpenFile) onOpenFile();
     } else {
       onDownload();
     }
@@ -152,7 +154,7 @@ export default function FileItem({
       </div>
 
       {/* Modified */}
-      <div className="text-xs text-muted text-right hidden md:block">
+      <div className="text-xs text-muted text-right hidden md:block" title={new Date(entry.modifiedAt).toLocaleString("ru-RU")}>
         {relativeTime(entry.modifiedAt)}
       </div>
 

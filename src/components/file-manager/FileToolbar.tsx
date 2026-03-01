@@ -1,6 +1,7 @@
 "use client";
 
-import { Search, Download, Trash, FolderOpen } from "@/components/Icons";
+import { Search, Download, Trash, FolderOpen, Plus } from "@/components/Icons";
+import { useUser } from "@/lib/UserContext";
 
 export type SortField = "name" | "size" | "modifiedAt";
 export type SortDirection = "asc" | "desc";
@@ -13,6 +14,7 @@ interface FileToolbarProps {
   onDeleteSelected: () => void;
   singleFolderSelected: boolean;
   onEnterFolder: () => void;
+  onNewItem?: () => void;
 }
 
 export default function FileToolbar({
@@ -23,7 +25,10 @@ export default function FileToolbar({
   onDeleteSelected,
   singleFolderSelected,
   onEnterFolder,
+  onNewItem,
 }: FileToolbarProps) {
+  const { isGuest } = useUser();
+
   return (
     <div className="flex flex-wrap items-center gap-2">
       {/* Search */}
@@ -37,6 +42,18 @@ export default function FileToolbar({
           className="w-full pl-8 pr-3 py-1.5 text-sm bg-surface-alt/50 border border-border-strong rounded-lg text-foreground placeholder-muted outline-none focus:border-accent/40 transition-colors"
         />
       </div>
+
+      {/* Create button */}
+      {!isGuest && onNewItem && (
+        <button
+          onClick={onNewItem}
+          className="flex items-center gap-1.5 px-3 py-2 md:px-2.5 md:py-1.5 text-xs text-accent-fg hover:text-accent-fg/80 bg-accent-muted border border-accent/20 rounded-lg transition-colors cursor-pointer"
+          title="Создать"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Создать</span>
+        </button>
+      )}
 
       {/* Enter folder */}
       {singleFolderSelected && (

@@ -93,6 +93,46 @@ const HOTKEY_GROUPS: HotkeyGroup[] = [
     ],
   },
   {
+    title: "Редактор",
+    hotkeys: [
+      {
+        description: "Сохранить файл",
+        mac: ["⌘", "S"],
+        win: ["Ctrl", "S"],
+      },
+      {
+        description: "Закрыть вкладку",
+        mac: ["⌥", "W"],
+        win: ["Alt", "W"],
+      },
+      {
+        description: "Превью (toggle)",
+        mac: ["⌘", "⇧", "V"],
+        win: ["Ctrl", "Shift", "V"],
+      },
+      {
+        description: "Поиск в файле",
+        mac: ["⌘", "F"],
+        win: ["Ctrl", "F"],
+      },
+      {
+        description: "Замена в файле",
+        mac: ["⌘", "H"],
+        win: ["Ctrl", "H"],
+      },
+      {
+        description: "Отменить",
+        mac: ["⌘", "Z"],
+        win: ["Ctrl", "Z"],
+      },
+      {
+        description: "Повторить",
+        mac: ["⌘", "⇧", "Z"],
+        win: ["Ctrl", "Shift", "Z"],
+      },
+    ],
+  },
+  {
     title: "Чат",
     hotkeys: [
       {

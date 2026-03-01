@@ -1,19 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyToken } from "@/lib/auth";
-import { safePath, getSessionProjectDir } from "@/lib/files";
+import { safeRealPath, getSessionProjectDir } from "@/lib/files";
 import fs from "fs/promises";
 
-function authCheck(request: NextRequest): boolean {
+function getRole(request: NextRequest): string | null {
   const token = request.cookies.get("auth-token")?.value;
-  return !!token && !!verifyToken(token);
+  if (!token) return null;
+  const payload = verifyToken(token);
+  if (!payload) return null;
+  return (payload as { role?: string }).role ?? null;
 }
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!authCheck(request)) {
+  const role = getRole(request);
+  if (!role) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (role === "guest") {
+    return NextResponse.json({ error: "Guests cannot delete files" }, { status: 403 });
   }
 
   const { id } = await params;
@@ -31,7 +38,7 @@ export async function POST(
   const errors: string[] = [];
 
   for (const p of paths) {
-    const abs = safePath(projectDir, p);
+    const abs = await safeRealPath(projectDir, p);
     if (!abs) {
       errors.push(`Invalid path: ${p}`);
       continue;

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyToken } from "@/lib/auth";
-import { safePath, getSessionProjectDir } from "@/lib/files";
+import { safeRealPath, getSessionProjectDir, isBinaryBuffer } from "@/lib/files";
 import fs from "fs/promises";
 
-const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB
+const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
 
 function authCheck(request: NextRequest): boolean {
   const token = request.cookies.get("auth-token")?.value;
@@ -29,7 +29,7 @@ export async function GET(
     return NextResponse.json({ error: "path required" }, { status: 400 });
   }
 
-  const filePath = safePath(projectDir, relativePath);
+  const filePath = await safeRealPath(projectDir, relativePath);
   if (!filePath) {
     return NextResponse.json({ error: "Invalid path" }, { status: 400 });
   }
@@ -47,8 +47,22 @@ export async function GET(
       );
     }
 
-    const content = await fs.readFile(filePath, "utf-8");
-    return NextResponse.json({ content, size: stat.size });
+    // Binary file detection
+    const buffer = await fs.readFile(filePath);
+    if (isBinaryBuffer(buffer)) {
+      return NextResponse.json(
+        { error: "Binary file", isBinary: true },
+        { status: 422 }
+      );
+    }
+
+    const content = buffer.toString("utf-8");
+    const mtime = stat.mtimeMs;
+
+    return NextResponse.json(
+      { content, size: stat.size, mtime },
+      { headers: { "Last-Modified": stat.mtime.toUTCString() } }
+    );
   } catch {
     return NextResponse.json({ error: "File not found" }, { status: 404 });
   }

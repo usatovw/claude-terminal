@@ -77,6 +77,25 @@ nginx ←→ upstream (blue:3000 | green:3001) — zero-downtime blue-green depl
 | `src/components/chat/DateSeparator.tsx` | Date dividers (Сегодня/Вчера/DD Month) |
 | `src/components/chat/MediaGallery.tsx` | Фото grid + Файлы list with infinite scroll |
 | `src/components/chat/ImageLightbox.tsx` | Fullscreen image preview |
+| `src/components/FileManager.tsx` | File manager — list view, editor mode routing, file operations |
+| `src/components/HotkeysModal.tsx` | Keyboard shortcuts reference modal |
+| `src/components/file-manager/EditorWorkspace.tsx` | Tabbed editor: tab bar + CodeMirror + resizable split preview, unsaved guards |
+| `src/components/file-manager/CodeEditor.tsx` | CodeMirror 6 wrapper with auto language detection |
+| `src/components/file-manager/TabBar.tsx` | Tab strip with dirty indicators, context menu (close/close others/close all) |
+| `src/components/file-manager/PreviewPanel.tsx` | Preview router — delegates to Markdown/JSON/Image/HTML/Media previews |
+| `src/components/file-manager/MarkdownPreview.tsx` | Markdown GFM renderer with highlight.js, code fence normalization |
+| `src/components/file-manager/DataPreview.tsx` | JSON collapsible tree viewer with expand/collapse |
+| `src/components/file-manager/NewFileModal.tsx` | Create file/folder modal with nested path support |
+| `src/components/file-manager/UnsavedChangesModal.tsx` | Dirty state confirmation dialog (save/discard/cancel) |
+| `src/components/file-manager/HtmlPreview.tsx` | Sandboxed iframe HTML preview |
+| `src/components/file-manager/MediaPreview.tsx` | Audio/video preview |
+| `src/components/file-manager/TabContextMenu.tsx` | Right-click tab context menu |
+| `src/lib/useEditorTabs.ts` | Tab state management (useReducer + sessionStorage persistence) |
+| `src/lib/EditorContext.tsx` | Editor context (hasUnsavedChanges, requestClose for dashboard guards) |
+| `src/lib/codemirror-theme.ts` | CodeMirror theme — VS Code Dark+ (dark) and Light+ (retro) syntax colors |
+| `src/lib/editor-utils.ts` | File type detection, CodeMirror language mapping, preview capability check |
+| `src/lib/files.ts` | Path validation, filename utilities, isValidFilePath for nested creation |
+| `src/app/api/sessions/[id]/files/create/route.ts` | File/folder creation API with nested path support |
 | `src/components/ui/lamp.tsx` | Aceternity Lamp effect for 404 |
 | `src/lib/TerminalScrollContext.tsx` | React context: terminal scroll state (viewportY, rows, totalLines) |
 | `src/components/presence/PresenceProvider.tsx` | WS client, presence + global chat context |
@@ -169,6 +188,22 @@ Figma/Miro-like multi-user presence with absolute content positioning. Separate 
 **EdgeIndicator** (`src/components/presence/EdgeIndicator.tsx`): when a remote cursor is off-screen (displayYPct < -5 or > 105), a colored pill appears at top/bottom edge with user name + arrow (↑/↓). Click scrolls terminal to that cursor's position via `term.scrollToLine()`. Multiple off-screen cursors stack with gap.
 
 **Cursor component**: single unified component with flex auto-layout (SVG cursor → chat bubble → name tag). Chat bubble appears on "/" key press with blur animation. Text broadcasts live on each keystroke. Auto-close after 5s inactivity. Name tag: solid presence color background with white text (visible on both dark and light themes). Name tag hidden for local user.
+
+## File manager & code editor
+
+Two views: **file list** (browse, create, rename, delete, download) and **tabbed editor** (edit with live preview).
+
+**Tab management** (`useEditorTabs.ts`): `useReducer` with actions OPEN_TAB, CLOSE_TAB, CLOSE_ALL, CLOSE_OTHERS, CLOSE_SAVED, MARK_DIRTY, MARK_CLEAN, SHOW_EDITOR, HIDE_EDITOR. State persisted to `sessionStorage` per session. Each tab tracks: id, path, name, dirty flag, mtime (for conflict detection).
+
+**Editor** (`CodeEditor.tsx`): CodeMirror 6 with auto language detection based on file extension (`editor-utils.ts`). Theme uses CSS custom properties (`codemirror-theme.ts`) — automatically adapts to Dark Violet (VS Code Dark+ colors) and Retro OS (VS Code Light+ colors) themes. 16 syntax token types: keyword, control, function, type, variable, property, string, number, comment, operator, tag, attribute, regexp, boolean, punctuation, parameter.
+
+**Preview** (`PreviewPanel.tsx`): routes to specialized preview components based on file type. Markdown (GFM via `marked` + `highlight.js`), JSON (collapsible tree), images (inline), HTML (sandboxed iframe), audio/video (native player). Resizable split view with drag handle (20-80% range). Per-tab preview mode: code / split / preview-only. Fullscreen preview toggle.
+
+**Unsaved changes protection**: `EditorContext.tsx` provides `hasUnsavedChanges` and `requestClose()` to parent components. Guards on: back button, tab close, session switch, view switch (Terminal ↔ Files), browser `beforeunload`. `UnsavedChangesModal` offers save all / discard / cancel.
+
+**External conflict detection** (`EditorWorkspace.tsx`): checks file mtime via API on window focus and every 10s for the active tab. Uses `tabsRef` to avoid stale closures. Shows conflict banner with reload/overwrite options.
+
+**File creation** (`NewFileModal.tsx` + `create/route.ts`): supports nested paths (e.g. `src/utils/helpers.ts`). Server creates intermediate directories with `fs.mkdir({ recursive: true })`. Validates each path segment. Duplicate detection for both files and folders.
 
 ## Conventions
 

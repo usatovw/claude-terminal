@@ -11,7 +11,10 @@ Self-hosted web interface for [Claude Code CLI](https://docs.anthropic.com/en/do
 - **Admin panel** — manage users, approve/reject registrations, change roles — no SMTP required
 - **Global chat** — persistent messages with markdown, file/image attachments, media gallery, real-time delivery via WebSocket
 - **Multi-session** — create, stop, resume, rename, delete sessions with loading states
-- **File manager** — browse, download, rename, delete files in session directories; recursive search; bulk zip-download
+- **File manager** — browse, download, rename, delete files in session directories; recursive search; bulk zip-download; create files/folders with nested paths
+- **Tabbed code editor** — CodeMirror 6 with VS Code Dark+/Light+ syntax highlighting, multi-tab editing, dirty state tracking, session persistence, keyboard shortcuts (Ctrl+S save, Ctrl+W close tab, Ctrl+P preview, search/replace)
+- **Live preview** — resizable split view (code + preview), Markdown (GFM), JSON collapsible tree, images, HTML iframe, media; per-tab preview mode; fullscreen toggle
+- **Unsaved changes protection** — guards on back navigation, tab close, session switch, and browser close; external file conflict detection
 - **Presence** — Figma/Miro-like cursors with absolute content positioning, edge indicators for off-screen cursors (click to scroll), live chat bubbles, session avatars via WebSocket
 - **Image paste** — Ctrl+V images from clipboard directly into Claude CLI (via X11 bridge)
 - **Mobile-first** — adaptive layout throughout: sidebar drawer, touch-friendly targets, chat overlay
@@ -193,7 +196,7 @@ nginx ←→ upstream (blue:3000 | green:3001) — zero-downtime blue-green depl
 5. **node-pty** attaches to tmux sessions lazily (on first client connect via WebSocket)
 6. Chat messages stored in SQLite, broadcast to all peers via presence WebSocket
 7. Image paste uses X11 clipboard bridge (Xvfb + xclip on DISPLAY :99)
-8. File manager reads session directories via REST API
+8. File manager reads session directories via REST API; tabbed code editor with live preview runs client-side via CodeMirror 6
 
 ## User management
 
@@ -272,15 +275,31 @@ Back up these files regularly:
 │   │   ├── SessionList.tsx      # Session sidebar + logout button
 │   │   ├── Navbar.tsx           # Top bar with admin + chat toggles
 │   │   ├── AdminPanel.tsx       # User management slide-over panel
+│   │   ├── FileManager.tsx      # File manager — list view + editor routing
+│   │   ├── HotkeysModal.tsx     # Keyboard shortcuts reference modal
 │   │   ├── chat/               # ChatPanel, ChatMessage, ChatInput, DateSeparator,
 │   │   │                       # MediaGallery, ImageLightbox
 │   │   ├── presence/           # PresenceProvider, CursorOverlay, Cursor, EdgeIndicator, Avatars
-│   │   ├── file-manager/       # FileItem, FileList, FileTableHeader, etc.
+│   │   ├── file-manager/       # Tabbed editor, preview panels, file operations
+│   │   │   ├── EditorWorkspace.tsx  # Tab bar + CodeMirror + resizable split preview
+│   │   │   ├── CodeEditor.tsx       # CodeMirror 6 wrapper with language detection
+│   │   │   ├── TabBar.tsx           # Tab strip with context menu
+│   │   │   ├── PreviewPanel.tsx     # Preview router (Markdown/JSON/Image/HTML/Media)
+│   │   │   ├── MarkdownPreview.tsx  # Markdown GFM renderer with highlight.js
+│   │   │   ├── DataPreview.tsx      # JSON collapsible tree viewer
+│   │   │   ├── NewFileModal.tsx     # Create file/folder modal
+│   │   │   ├── UnsavedChangesModal.tsx  # Dirty state confirmation dialog
+│   │   │   └── ...                  # FileItem, FileToolbar, MediaPreview, HtmlPreview
 │   │   └── ui/                 # Aceternity UI components
 │   └── lib/
 │       ├── auth.ts             # JWT (full payload) + bcrypt
 │       ├── db.ts               # TS wrapper for global.db
 │       ├── email.ts            # Nodemailer for registration emails
+│       ├── useEditorTabs.ts    # Tab state management (useReducer + sessionStorage)
+│       ├── EditorContext.tsx    # Editor context (unsaved changes, requestClose)
+│       ├── codemirror-theme.ts # CodeMirror theme (VS Code Dark+/Light+ colors)
+│       ├── editor-utils.ts     # File type detection, language mapping
+│       ├── files.ts            # Path validation, filename utilities
 │       ├── UserContext.tsx      # React context for user identity
 │       ├── markdown.ts         # Lightweight MD→HTML renderer
 │       ├── TerminalScrollContext.tsx # Terminal scroll state for absolute cursor positioning

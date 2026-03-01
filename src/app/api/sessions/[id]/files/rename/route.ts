@@ -1,20 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyToken } from "@/lib/auth";
-import { safePath, getSessionProjectDir } from "@/lib/files";
+import { safeRealPath, getSessionProjectDir, isValidFilename } from "@/lib/files";
 import fs from "fs/promises";
 import path from "path";
 
-function authCheck(request: NextRequest): boolean {
+function getRole(request: NextRequest): string | null {
   const token = request.cookies.get("auth-token")?.value;
-  return !!token && !!verifyToken(token);
+  if (!token) return null;
+  const payload = verifyToken(token);
+  if (!payload) return null;
+  return (payload as { role?: string }).role ?? null;
 }
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!authCheck(request)) {
+  const role = getRole(request);
+  if (!role) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (role === "guest") {
+    return NextResponse.json({ error: "Guests cannot rename files" }, { status: 403 });
   }
 
   const { id } = await params;
@@ -30,12 +37,11 @@ export async function POST(
     return NextResponse.json({ error: "oldPath and newName required" }, { status: 400 });
   }
 
-  // newName must be a plain filename — no slashes, backslashes, or ..
-  if (/[/\\]/.test(newName) || newName.includes("..") || !newName.trim()) {
+  if (!isValidFilename(newName.trim())) {
     return NextResponse.json({ error: "Invalid new name" }, { status: 400 });
   }
 
-  const absOld = safePath(projectDir, oldPath);
+  const absOld = await safeRealPath(projectDir, oldPath);
   if (!absOld || absOld === projectDir) {
     return NextResponse.json({ error: "Invalid path" }, { status: 400 });
   }

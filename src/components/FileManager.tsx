@@ -6,9 +6,14 @@ import Breadcrumbs from "@/components/file-manager/Breadcrumbs";
 import FileToolbar, { SortField, SortDirection } from "@/components/file-manager/FileToolbar";
 import FileList from "@/components/file-manager/FileList";
 import DeleteConfirmModal from "@/components/file-manager/DeleteConfirmModal";
-import MarkdownViewer from "@/components/file-manager/MarkdownViewer";
+import EditorWorkspace from "@/components/file-manager/EditorWorkspace";
+import NewFileModal from "@/components/file-manager/NewFileModal";
+import UnsavedChangesModal from "@/components/file-manager/UnsavedChangesModal";
 import { FileEntry } from "@/components/file-manager/FileItem";
 import { useIsMobile } from "@/lib/useIsMobile";
+import { useEditorTabs } from "@/lib/useEditorTabs";
+import { useEditor } from "@/lib/EditorContext";
+import { isTextFile, isImageFile } from "@/lib/editor-utils";
 
 const MOBILE_COLUMNS = "32px 28px 1fr 80px";
 
@@ -18,8 +23,9 @@ interface FileManagerProps {
   visible?: boolean;
 }
 
-export default function FileManager({ sessionId, initialFile, visible = true }: FileManagerProps) {
+function FileManagerInner({ sessionId, initialFile, visible = true }: FileManagerProps) {
   const router = useRouter();
+  const { setHasUnsavedChanges, setCloseHandler } = useEditor();
   const [currentPath, setCurrentPath] = useState(".");
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,16 +39,35 @@ export default function FileManager({ sessionId, initialFile, visible = true }: 
   const [columnWidths, setColumnWidths] = useState("32px 28px 1fr 100px 140px 80px");
   const isMobile = useIsMobile();
   const effectiveColumns = isMobile ? MOBILE_COLUMNS : columnWidths;
-  const [fileStack, setFileStack] = useState<{ path: string; name: string }[]>(() => {
-    if (initialFile) {
-      const name = initialFile.split("/").pop() || initialFile;
-      return [{ path: initialFile, name }];
-    }
-    return [];
-  });
   const [searchResults, setSearchResults] = useState<FileEntry[] | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [newFileModal, setNewFileModal] = useState(false);
+
+  // Editor tabs
+  const {
+    tabs, activeTabId, activeTab, showEditor, hasDirtyTabs,
+    openTab, closeTab, setActiveTab,
+    markDirty, markClean, updateMtime,
+    closeOthers, closeAll, hideEditor,
+  } = useEditorTabs(sessionId);
+
+  const editorMode = showEditor;
+
+  // Sync unsaved state to EditorContext
+  useEffect(() => {
+    setHasUnsavedChanges(hasDirtyTabs);
+  }, [hasDirtyTabs, setHasUnsavedChanges]);
+
+  // Open initial file if provided
+  useEffect(() => {
+    if (initialFile) {
+      const name = initialFile.split("/").pop() || initialFile;
+      openTab(initialFile, name);
+      router.replace("/dashboard", { scroll: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Clear ?file= param from URL after consuming it
   useEffect(() => {
@@ -70,7 +95,7 @@ export default function FileManager({ sessionId, initialFile, visible = true }: 
     if (!silent) setLoading(false);
   }, [sessionId, currentPath]);
 
-  // Fetch entries when path or session changes (no state resets here to avoid strobe)
+  // Fetch entries when path or session changes
   const initialLoadDone = useRef(false);
   useEffect(() => {
     fetchEntries(initialLoadDone.current);
@@ -83,7 +108,6 @@ export default function FileManager({ sessionId, initialFile, visible = true }: 
     if (prevSessionIdRef.current !== sessionId) {
       prevSessionIdRef.current = sessionId;
       setCurrentPath(".");
-      setFileStack([]);
       setSelectedPaths(new Set());
       setRenamingEntry(null);
       setSearchQuery("");
@@ -92,20 +116,19 @@ export default function FileManager({ sessionId, initialFile, visible = true }: 
     }
   }, [sessionId]);
 
-  // Refresh on visibility change + poll while visible
+  // Refresh on visibility change + poll while visible (suspend when editor open)
   const prevVisibleRef = useRef(visible);
   useEffect(() => {
-    // Silent refresh when becoming visible
     if (visible && !prevVisibleRef.current) {
       fetchEntries(true);
     }
     prevVisibleRef.current = visible;
 
-    // Poll every 3s while visible (silent)
-    if (!visible) return;
+    // Suspend polling when editor is open
+    if (!visible || editorMode) return;
     const interval = setInterval(() => fetchEntries(true), 3000);
     return () => clearInterval(interval);
-  }, [visible, fetchEntries]);
+  }, [visible, fetchEntries, editorMode]);
 
   // Debounced recursive search
   useEffect(() => {
@@ -190,7 +213,6 @@ export default function FileManager({ sessionId, initialFile, visible = true }: 
       setSelectedPaths(new Set());
       setRenamingEntry(null);
 
-      // If in search mode, navigate to parent folder of the result
       if (searchResults) {
         const entry = searchResults.find((e) => (e.relativePath || e.name) === nameOrPath);
         if (entry?.type === "directory" && entry.relativePath) {
@@ -200,7 +222,6 @@ export default function FileManager({ sessionId, initialFile, visible = true }: 
           return;
         }
         if (entry?.relativePath) {
-          // Navigate to parent directory of the file
           const parentDir = entry.relativePath.split("/").slice(0, -1).join("/");
           setSearchQuery("");
           setSearchResults(null);
@@ -287,7 +308,6 @@ export default function FileManager({ sessionId, initialFile, visible = true }: 
 
   const handleDownload = useCallback(
     (nameOrPath: string) => {
-      // In search mode, relativePath is already relative to project root
       const p = searchResults
         ? nameOrPath
         : fullPath(nameOrPath);
@@ -369,25 +389,16 @@ export default function FileManager({ sessionId, initialFile, visible = true }: 
     setDeleteConfirm([name]);
   }, []);
 
+  // Open file in editor
   const handleOpenFile = useCallback(
     (nameOrPath: string) => {
       const p = searchResults ? nameOrPath : fullPath(nameOrPath);
       const name = nameOrPath.split("/").pop() || nameOrPath;
-      setFileStack([{ path: p, name }]);
+      setSelectedPaths(new Set());
+      openTab(p, name);
     },
-    [currentPath, searchResults]
+    [currentPath, searchResults, openTab]
   );
-
-  const handleFileNavigate = useCallback((path: string, name: string) => {
-    setFileStack((prev) => [...prev, { path, name }]);
-  }, []);
-
-  const handleFileClose = useCallback(() => {
-    setFileStack((prev) => {
-      if (prev.length <= 1) return [];
-      return prev.slice(0, -1);
-    });
-  }, []);
 
   const handleDeleteSelected = useCallback(() => {
     setDeleteConfirm([...selectedPaths]);
@@ -414,17 +425,80 @@ export default function FileManager({ sessionId, initialFile, visible = true }: 
     setDeleteConfirm(null);
   }, [deleteConfirm, sessionId, currentPath, fetchEntries]);
 
-  const viewingFile = fileStack.length > 0 ? fileStack[fileStack.length - 1] : null;
+  // Editor back handler — hide editor but keep tabs alive
+  const handleEditorBack = useCallback(() => {
+    hideEditor();
+  }, [hideEditor]);
 
-  if (viewingFile) {
+  // Handle file creation
+  const handleFileCreated = useCallback((relativePath: string, name: string, type: "file" | "folder") => {
+    fetchEntries();
+    if (type === "file") {
+      openTab(relativePath, name);
+    }
+  }, [fetchEntries, openTab]);
+
+  // Promise-based close handler for external guards (view switch, session switch)
+  const pendingCloseRef = useRef<{ resolve: (v: boolean) => void } | null>(null);
+  const [showExternalUnsavedModal, setShowExternalUnsavedModal] = useState(false);
+
+  useEffect(() => {
+    setCloseHandler(async () => {
+      if (!hasDirtyTabs) return true;
+      return new Promise<boolean>((resolve) => {
+        pendingCloseRef.current = { resolve };
+        setShowExternalUnsavedModal(true);
+      });
+    });
+    return () => setCloseHandler(null);
+  }, [hasDirtyTabs, setCloseHandler]);
+
+  const handleExternalUnsavedSave = useCallback(async () => {
+    // Cannot save from outside EditorWorkspace — treat as discard
+    setShowExternalUnsavedModal(false);
+    pendingCloseRef.current?.resolve(true);
+    pendingCloseRef.current = null;
+  }, []);
+
+  const handleExternalUnsavedDiscard = useCallback(() => {
+    setShowExternalUnsavedModal(false);
+    pendingCloseRef.current?.resolve(true);
+    pendingCloseRef.current = null;
+  }, []);
+
+  const handleExternalUnsavedCancel = useCallback(() => {
+    setShowExternalUnsavedModal(false);
+    pendingCloseRef.current?.resolve(false);
+    pendingCloseRef.current = null;
+  }, []);
+
+  // If editor mode with tabs open, show EditorWorkspace
+  if (editorMode) {
     return (
-      <MarkdownViewer
-        sessionId={sessionId}
-        filePath={viewingFile.path}
-        fileName={viewingFile.name}
-        onClose={handleFileClose}
-        onNavigate={handleFileNavigate}
-      />
+      <>
+        <EditorWorkspace
+          sessionId={sessionId}
+          tabs={tabs}
+          activeTabId={activeTabId}
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          onCloseTab={closeTab}
+          onCloseOthers={closeOthers}
+          onCloseAll={closeAll}
+          onMarkDirty={markDirty}
+          onMarkClean={markClean}
+          onUpdateMtime={updateMtime}
+          onOpenTab={openTab}
+          onBack={handleEditorBack}
+          onAddFile={hideEditor}
+        />
+        <UnsavedChangesModal
+          open={showExternalUnsavedModal}
+          onSave={handleExternalUnsavedSave}
+          onDiscard={handleExternalUnsavedDiscard}
+          onCancel={handleExternalUnsavedCancel}
+        />
+      </>
     );
   }
 
@@ -441,6 +515,7 @@ export default function FileManager({ sessionId, initialFile, visible = true }: 
           onDeleteSelected={handleDeleteSelected}
           singleFolderSelected={singleFolderSelected}
           onEnterFolder={handleEnterFolder}
+          onNewItem={() => setNewFileModal(true)}
         />
       </div>
 
@@ -481,6 +556,19 @@ export default function FileManager({ sessionId, initialFile, visible = true }: 
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeleteConfirm(null)}
       />
+
+      {/* New file/folder modal */}
+      <NewFileModal
+        open={newFileModal}
+        sessionId={sessionId}
+        currentPath={currentPath}
+        onClose={() => setNewFileModal(false)}
+        onCreated={handleFileCreated}
+      />
     </div>
   );
+}
+
+export default function FileManager(props: FileManagerProps) {
+  return <FileManagerInner {...props} />;
 }

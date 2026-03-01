@@ -34,12 +34,23 @@ fi
 log "Current: $old_name (port $current_port)"
 log "Deploying to: $new_name (port $new_port)"
 
-# ── Step 1: Build ──
+# ── Step 1: Install deps + Build ──
+log "Installing dependencies..."
+npm ci --include=dev --prefer-offline || die "npm ci failed"
+
 log "Building Next.js..."
 build_start=$(date +%s)
-npm run build || die "Build failed"
+# Backup previous build for rollback
+[ -d .next ] && cp -r .next .next.backup 2>/dev/null || true
+npm run build || {
+  log "Build failed, restoring backup..."
+  [ -d .next.backup ] && rm -rf .next && mv .next.backup .next
+  die "Build failed"
+}
+rm -rf .next.backup 2>/dev/null || true
 build_end=$(date +%s)
 log "Build completed in $((build_end - build_start))s"
+log "Bundle size: $(du -sh .next/static/chunks/ 2>/dev/null | cut -f1)"
 
 # ── Step 2: Start new instance ──
 log "Starting $new_name on port $new_port..."
@@ -95,6 +106,8 @@ sleep "$DRAIN_WAIT"
 
 # ── Step 6: Stop old instance ──
 log "Stopping $old_name..."
+pm2 stop "$old_name" 2>/dev/null || true
+# Clean up after drain — delete the stopped process
 pm2 delete "$old_name" 2>/dev/null || true
 
 # ── Step 7: Verify old instance is down ──

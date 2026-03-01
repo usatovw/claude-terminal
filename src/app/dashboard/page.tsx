@@ -27,6 +27,7 @@ import AdminPanel from "@/components/AdminPanel";
 import ImageLightbox from "@/components/chat/ImageLightbox";
 import { TerminalScrollProvider } from "@/lib/TerminalScrollContext";
 import { ProviderProvider, useProviders, type Provider } from "@/lib/ProviderContext";
+import { EditorProvider, useEditor } from "@/lib/EditorContext";
 
 const Terminal = dynamic(() => import("@/components/Terminal"), {
   ssr: false,
@@ -44,7 +45,9 @@ export default function Dashboard() {
         <UserProvider>
           <PresenceProvider>
             <ProviderProvider>
-              <DashboardInner />
+              <EditorProvider>
+                <DashboardInner />
+              </EditorProvider>
             </ProviderProvider>
           </PresenceProvider>
         </UserProvider>
@@ -60,6 +63,7 @@ function DashboardInner() {
   const { joinSession: presenceJoin, onPendingUser } = usePresence();
   const { theme, toggleTheme } = useTheme();
   const { providers, refetch: refetchProviders } = useProviders();
+  const { hasUnsavedChanges, requestClose } = useEditor();
   const contentRef = useRef<HTMLDivElement>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [activeProviderSlug, setActiveProviderSlug] = useState<string>("claude");
@@ -154,16 +158,16 @@ function DashboardInner() {
     }
   }, [initialFile, activeSessionId, sessions]);
 
-  // Warn before closing tab with active session
+  // Warn before closing tab with active session or unsaved editor changes
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
-      if (activeSessionId && connectionStatus === "connected") {
+      if ((activeSessionId && connectionStatus === "connected") || hasUnsavedChanges) {
         e.preventDefault();
       }
     };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
-  }, [activeSessionId, connectionStatus]);
+  }, [activeSessionId, connectionStatus, hasUnsavedChanges]);
 
   // Sync active session to presence
   useEffect(() => {
@@ -193,13 +197,17 @@ function DashboardInner() {
     router.push("/");
   }, [router]);
 
-  const handleSelectSession = useCallback((sessionId: string) => {
+  const handleSelectSession = useCallback(async (sessionId: string) => {
+    if (hasUnsavedChanges) {
+      const canProceed = await requestClose();
+      if (!canProceed) return;
+    }
     setActiveSessionId(sessionId);
     setTerminalKey((k) => k + 1);
     setConnectionStatus("idle");
     setMobileSidebarOpen(false);
     setViewMode("terminal");
-  }, []);
+  }, [hasUnsavedChanges, requestClose]);
 
   const handleSessionDeleted = useCallback(
     (sessionId: string) => {
@@ -248,12 +256,16 @@ function DashboardInner() {
     setMobileSidebarOpen(false);
   }, []);
 
-  const handleSwitchView = useCallback((mode: ViewMode) => {
+  const handleSwitchView = useCallback(async (mode: ViewMode) => {
+    if (hasUnsavedChanges && mode !== viewMode) {
+      const canProceed = await requestClose();
+      if (!canProceed) return;
+    }
     setViewMode(mode);
     if (mode === "terminal") {
       setTerminalKey((k) => k + 1);
     }
-  }, []);
+  }, [hasUnsavedChanges, requestClose, viewMode]);
 
   const handleResumeSession = useCallback(async (sessionId?: string) => {
     const targetId = sessionId || activeSessionId;

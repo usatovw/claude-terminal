@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "motion/react";
 import Breadcrumbs from "@/components/file-manager/Breadcrumbs";
 import FileToolbar, { SortField, SortDirection } from "@/components/file-manager/FileToolbar";
 import FileList from "@/components/file-manager/FileList";
@@ -10,10 +11,70 @@ import EditorWorkspace from "@/components/file-manager/EditorWorkspace";
 import NewFileModal from "@/components/file-manager/NewFileModal";
 import UnsavedChangesModal from "@/components/file-manager/UnsavedChangesModal";
 import { FileEntry } from "@/components/file-manager/FileItem";
+import { Upload } from "@/components/Icons";
 import { useIsMobile } from "@/lib/useIsMobile";
 import { useEditorTabs } from "@/lib/useEditorTabs";
 import { useEditor } from "@/lib/EditorContext";
+import { useUser } from "@/lib/UserContext";
 import { isTextFile, isImageFile } from "@/lib/editor-utils";
+
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
+const MAX_FILES = 100;
+const DANGEROUS_EXTENSIONS = new Set([
+  ".exe", ".bat", ".cmd", ".sh", ".ps1", ".msi", ".dll", ".so",
+]);
+
+interface UploadItem {
+  file: File;
+  relativePath: string;
+}
+
+/** Recursively read all files from a DataTransfer (supports folders via webkitGetAsEntry) */
+async function readDroppedItems(dataTransfer: DataTransfer): Promise<UploadItem[]> {
+  const items: UploadItem[] = [];
+
+  // Try webkitGetAsEntry for folder support
+  const entries: FileSystemEntry[] = [];
+  for (let i = 0; i < dataTransfer.items.length; i++) {
+    const entry = dataTransfer.items[i].webkitGetAsEntry?.();
+    if (entry) entries.push(entry);
+  }
+
+  if (entries.length > 0) {
+    async function readEntry(entry: FileSystemEntry, basePath: string) {
+      if (entry.isFile) {
+        const file = await new Promise<File>((resolve, reject) => {
+          (entry as FileSystemFileEntry).file(resolve, reject);
+        });
+        items.push({ file, relativePath: basePath + entry.name });
+      } else if (entry.isDirectory) {
+        const reader = (entry as FileSystemDirectoryEntry).createReader();
+        // readEntries returns batches — must call repeatedly until empty
+        let batch: FileSystemEntry[];
+        do {
+          batch = await new Promise<FileSystemEntry[]>((resolve, reject) => {
+            reader.readEntries(resolve, reject);
+          });
+          for (const child of batch) {
+            await readEntry(child, basePath + entry.name + "/");
+          }
+        } while (batch.length > 0);
+      }
+    }
+
+    for (const entry of entries) {
+      await readEntry(entry, "");
+    }
+    return items;
+  }
+
+  // Fallback: plain files (no folder API support)
+  for (let i = 0; i < dataTransfer.files.length; i++) {
+    const file = dataTransfer.files[i];
+    items.push({ file, relativePath: file.name });
+  }
+  return items;
+}
 
 const MOBILE_COLUMNS = "32px 28px 1fr 80px";
 
@@ -43,6 +104,13 @@ function FileManagerInner({ sessionId, initialFile, visible = true }: FileManage
   const [searchLoading, setSearchLoading] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [newFileModal, setNewFileModal] = useState(false);
+
+  // Upload state
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const dragCounterRef = useRef(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const { isGuest } = useUser();
 
   // Editor tabs
   const {
@@ -438,6 +506,121 @@ function FileManagerInner({ sessionId, initialFile, visible = true }: FileManage
     }
   }, [fetchEntries, openTab]);
 
+  // Core upload handler (supports relative paths for folder structure)
+  const handleUploadItems = useCallback(async (items: UploadItem[]) => {
+    // Client-side validation
+    if (items.length > MAX_FILES) {
+      setUploadError(`Максимум ${MAX_FILES} файлов за раз`);
+      setTimeout(() => setUploadError(null), 5000);
+      return;
+    }
+
+    const errors: string[] = [];
+    const validItems: UploadItem[] = [];
+
+    for (const item of items) {
+      const ext = item.file.name.includes(".")
+        ? "." + item.file.name.split(".").pop()!.toLowerCase()
+        : "";
+      if (DANGEROUS_EXTENSIONS.has(ext)) {
+        errors.push(`${item.relativePath}: расширение ${ext} запрещено`);
+        continue;
+      }
+      if (item.file.size > MAX_FILE_SIZE) {
+        errors.push(`${item.relativePath}: превышает 50 МБ`);
+        continue;
+      }
+      validItems.push(item);
+    }
+
+    if (validItems.length === 0) {
+      setUploadError(errors.join("; "));
+      setTimeout(() => setUploadError(null), 5000);
+      return;
+    }
+
+    setUploading(true);
+    setUploadError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("directory", currentPath);
+      for (const item of validItems) {
+        formData.append("file", item.file);
+        formData.append("relativePath", item.relativePath);
+      }
+
+      const res = await fetch(`/api/sessions/${sessionId}/files/upload`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok && !data.errors) {
+        setUploadError(data.error || "Ошибка загрузки");
+        setTimeout(() => setUploadError(null), 5000);
+      } else {
+        const serverErrors = data.errors as { name: string; error: string }[];
+        const allErrors = [
+          ...errors,
+          ...serverErrors.map((e: { name: string; error: string }) => `${e.name}: ${e.error}`),
+        ];
+        if (allErrors.length > 0) {
+          setUploadError(allErrors.join("; "));
+          setTimeout(() => setUploadError(null), 5000);
+        }
+        fetchEntries();
+      }
+    } catch {
+      setUploadError("Ошибка сети");
+      setTimeout(() => setUploadError(null), 5000);
+    }
+    setUploading(false);
+  }, [currentPath, sessionId, fetchEntries]);
+
+  // Wrapper for simple FileList uploads (toolbar button)
+  const handleUpload = useCallback(async (files: FileList | File[]) => {
+    const items: UploadItem[] = Array.from(files).map((file) => ({
+      file,
+      relativePath: file.name,
+    }));
+    handleUploadItems(items);
+  }, [handleUploadItems]);
+
+  // Drag & Drop handlers
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    if (isGuest) return;
+    dragCounterRef.current++;
+    if (dragCounterRef.current === 1) {
+      setIsDragging(true);
+    }
+  }, [isGuest]);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current--;
+    if (dragCounterRef.current === 0) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current = 0;
+    setIsDragging(false);
+    if (isGuest) return;
+    const items = await readDroppedItems(e.dataTransfer);
+    if (items.length > 0) {
+      handleUploadItems(items);
+    }
+  }, [isGuest, handleUploadItems]);
+
   // Promise-based close handler for external guards (view switch, session switch)
   const pendingCloseRef = useRef<{ resolve: (v: boolean) => void } | null>(null);
   const [showExternalUnsavedModal, setShowExternalUnsavedModal] = useState(false);
@@ -503,7 +686,13 @@ function FileManagerInner({ sessionId, initialFile, visible = true }: FileManage
   }
 
   return (
-    <div className="flex flex-col w-full h-full bg-background rounded-xl overflow-hidden">
+    <div
+      className="flex flex-col w-full h-full bg-background rounded-xl overflow-hidden relative"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
       {/* Toolbar */}
       <div className="border-b border-border px-4 py-3 space-y-3">
         <Breadcrumbs currentPath={currentPath} onNavigate={handleBreadcrumbNavigate} />
@@ -516,6 +705,7 @@ function FileManagerInner({ sessionId, initialFile, visible = true }: FileManage
           singleFolderSelected={singleFolderSelected}
           onEnterFolder={handleEnterFolder}
           onNewItem={() => setNewFileModal(true)}
+          onUpload={handleUpload}
         />
       </div>
 
@@ -549,6 +739,48 @@ function FileManagerInner({ sessionId, initialFile, visible = true }: FileManage
           isRootPath={currentPath === "."}
         />
       </div>
+
+      {/* Upload progress / error */}
+      {(uploading || uploadError) && (
+        <div className="border-t border-border px-4 py-2 bg-surface-alt">
+          {uploading && (
+            <div className="flex items-center gap-2 text-sm text-muted-fg">
+              <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              <span>Загрузка файлов...</span>
+            </div>
+          )}
+          {uploadError && (
+            <div className="text-xs text-danger">{uploadError}</div>
+          )}
+        </div>
+      )}
+
+      {/* Drag & Drop overlay */}
+      <AnimatePresence>
+        {isDragging && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-40 flex items-center justify-center bg-accent/10 backdrop-blur-[2px]"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="flex flex-col items-center gap-3 p-8 rounded-2xl border-2 border-dashed border-accent bg-surface/80"
+            >
+              <Upload className="w-10 h-10 text-accent" />
+              <span className="text-sm text-accent-fg font-medium">Перетащите файлы сюда</span>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Delete modal */}
       <DeleteConfirmModal

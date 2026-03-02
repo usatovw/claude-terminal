@@ -11,7 +11,7 @@ Self-hosted web interface for [Claude Code CLI](https://docs.anthropic.com/en/do
 - **Admin panel** — manage users, approve/reject registrations, change roles — no SMTP required
 - **Global chat** — persistent messages with markdown, file/image attachments, media gallery, real-time delivery via WebSocket
 - **Multi-session** — create, stop, resume, rename, delete sessions with loading states
-- **File manager** — browse, download, rename, delete files in session directories; recursive search; bulk zip-download; create files/folders with nested paths
+- **File manager** — browse, upload, download, rename, delete files in session directories; drag & drop upload with folder structure support; recursive search; bulk zip-download; create files/folders with nested paths
 - **Tabbed code editor** — CodeMirror 6 with VS Code Dark+/Light+ syntax highlighting, multi-tab editing, dirty state tracking, session persistence, keyboard shortcuts (Ctrl+S save, Ctrl+W close tab, Ctrl+P preview, search/replace)
 - **Live preview** — resizable split view (code + preview), Markdown (GFM), JSON collapsible tree, images, HTML iframe, media; per-tab preview mode; fullscreen toggle
 - **Unsaved changes protection** — guards on back navigation, tab close, session switch, and browser close; external file conflict detection
@@ -113,7 +113,7 @@ server {
     ssl_certificate /etc/letsencrypt/live/your-domain.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/your-domain.com/privkey.pem;
 
-    client_max_body_size 55M;  # for chat file uploads (50MB + overhead)
+    client_max_body_size 105M;  # for file/chat uploads (100MB + overhead)
 
     location / {
         proxy_pass http://claude-terminal;
@@ -344,7 +344,8 @@ By default the server listens on `127.0.0.1`. For direct access (without Nginx),
 - WebSocket connections require valid short-lived JWT (30s)
 - Cookies: httpOnly + secure + SameSite=strict in production
 - Server listens on 127.0.0.1 only by default (not exposed directly)
-- File API sandboxed to session directories (path traversal protection)
+- File API sandboxed to session directories (path traversal + symlink protection)
+- File upload: rate-limited (30 req/5 min), size-limited (50MB/file, 100 files/req), dangerous extensions blocked (.exe, .bat, .sh, etc.)
 - Chat uploads validated by MIME type and size (50MB max)
 - Registration requires admin approval — no self-service access
 - Guest access requires secret code, read-only in chat

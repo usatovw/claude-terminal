@@ -2,6 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "100mb",
+    },
+  },
   headers: async () => [
     {
       // HTML pages and API routes — always revalidate (ETag still works for 304s)

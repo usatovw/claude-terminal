@@ -1,6 +1,7 @@
 "use client";
 
-import { Search, Download, Trash, FolderOpen, Plus } from "@/components/Icons";
+import { Search, Download, Trash, FolderOpen, Plus, Upload } from "@/components/Icons";
+import { useRef } from "react";
 import { useUser } from "@/lib/UserContext";
 
 export type SortField = "name" | "size" | "modifiedAt";
@@ -15,6 +16,7 @@ interface FileToolbarProps {
   singleFolderSelected: boolean;
   onEnterFolder: () => void;
   onNewItem?: () => void;
+  onUpload?: (files: FileList) => void;
 }
 
 export default function FileToolbar({
@@ -26,7 +28,9 @@ export default function FileToolbar({
   singleFolderSelected,
   onEnterFolder,
   onNewItem,
+  onUpload,
 }: FileToolbarProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { isGuest } = useUser();
 
   return (
@@ -53,6 +57,32 @@ export default function FileToolbar({
           <Plus className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">Создать</span>
         </button>
+      )}
+
+      {/* Upload button */}
+      {!isGuest && onUpload && (
+        <>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files && e.target.files.length > 0) {
+                onUpload(e.target.files);
+                e.target.value = "";
+              }
+            }}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-1.5 px-3 py-2 md:px-2.5 md:py-1.5 text-xs text-accent-fg hover:text-accent-fg/80 bg-accent-muted border border-accent/20 rounded-lg transition-colors cursor-pointer"
+            title="Загрузить"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Загрузить</span>
+          </button>
+        </>
       )}
 
       {/* Enter folder */}
